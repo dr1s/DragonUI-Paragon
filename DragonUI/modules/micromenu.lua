@@ -102,6 +102,7 @@ if isAscensionServer then
         _G.AchievementMicroButton,
         _G.QuestLogMicroButton,
         _G.SocialsMicroButton,
+        _G.ParagonMicroButton,
         _G.LFDMicroButton,
         _G.PathToAscensionMicroButton,
         _G.ChallengesMicroButton,
@@ -116,6 +117,7 @@ else
         _G.AchievementMicroButton,
         _G.QuestLogMicroButton,
         _G.SocialsMicroButton,
+        _G.ParagonMicroButton,
         _G.LFDMicroButton,
         _G.CollectionsMicroButton,
         _G.PVPMicroButton,
@@ -433,6 +435,7 @@ local function GetAtlasKey(buttonName)
             achievement = "UI-HUD-MicroMenu-Achievements",
             questlog = "UI-HUD-MicroMenu-Questlog",
             socials = "UI-HUD-MicroMenu-GuildCommunities",
+            paragon = nil, -- Uses Blizzard Abilities textures
             lfd = "UI-HUD-MicroMenu-Groupfinder",
             pathtoascension = "UI-HUD-MicroMenu-PathToAscension",
             challenges = "UI-HUD-MicroMenu-Challenges",
@@ -447,6 +450,7 @@ local function GetAtlasKey(buttonName)
             achievement = "UI-HUD-MicroMenu-Achievements",
             questlog = "UI-HUD-MicroMenu-Questlog",
             socials = "UI-HUD-MicroMenu-GuildCommunities",
+            paragon = nil, -- Uses Blizzard Abilities textures
             lfd = "UI-HUD-MicroMenu-Groupfinder",
             collections = "UI-HUD-MicroMenu-Collections",
             pvp = nil,
@@ -1526,6 +1530,124 @@ local function ApplyMicromenuSystem()
         end
     end
 
+    local function SetupParagonButton(button)
+        -- Use DragonUI's spellbook atlas texture (Paragon uses Blizzard's "Abilities" icon)
+        local microTexture = 'Interface\\AddOns\\DragonUI\\Textures\\Micromenu\\uimicromenu2x'
+        local atlasKey = "UI-HUD-MicroMenu-SpellbookAbilities"
+        local atlasData = MicromenuAtlas
+
+        local upCoords = atlasData[atlasKey .. "-Up"]
+        local downCoords = atlasData[atlasKey .. "-Down"]
+        local disabledCoords = atlasData[atlasKey .. "-Disabled"]
+        local mouseoverCoords = atlasData[atlasKey .. "-Mouseover"]
+
+        if upCoords and #upCoords >= 4 then
+            local tex = button:GetNormalTexture()
+            if not tex then tex = button:CreateTexture(nil, "ARTWORK") button:SetNormalTexture(tex) end
+            tex:SetTexture(microTexture)
+            tex:SetTexCoord(upCoords[1], upCoords[2], upCoords[3], upCoords[4])
+            tex:ClearAllPoints()
+            tex:SetAllPoints(button)
+        end
+
+        if downCoords and #downCoords >= 4 then
+            local tex = button:GetPushedTexture()
+            if not tex then tex = button:CreateTexture(nil, "ARTWORK") button:SetPushedTexture(tex) end
+            tex:SetTexture(microTexture)
+            tex:SetTexCoord(downCoords[1], downCoords[2], downCoords[3], downCoords[4])
+            tex:ClearAllPoints()
+            tex:SetAllPoints(button)
+        end
+
+        if disabledCoords and #disabledCoords >= 4 then
+            local tex = button:GetDisabledTexture()
+            if not tex then tex = button:CreateTexture(nil, "ARTWORK") button:SetDisabledTexture(tex) end
+            tex:SetTexture(microTexture)
+            tex:SetTexCoord(disabledCoords[1], disabledCoords[2], disabledCoords[3], disabledCoords[4])
+            tex:ClearAllPoints()
+            tex:SetAllPoints(button)
+        end
+
+        if mouseoverCoords and #mouseoverCoords >= 4 then
+            local tex = button:GetHighlightTexture()
+            if not tex then tex = button:CreateTexture(nil, "ARTWORK") button:SetHighlightTexture(tex) end
+            tex:SetTexture(microTexture)
+            tex:SetTexCoord(mouseoverCoords[1], mouseoverCoords[2], mouseoverCoords[3], mouseoverCoords[4])
+            tex:ClearAllPoints()
+            tex:SetAllPoints(button)
+        end
+
+        -- Set up background chrome (same as other colored buttons)
+        local backgroundTexture = 'Interface\\AddOns\\DragonUI\\Textures\\Micromenu\\uimicromenu2x'
+        local dx, dy = -1, 1
+        local offX, offY = button:GetPushedTextOffset()
+        local sizeX, sizeY = button:GetSize()
+
+        if not button.DragonUIBackground then
+            local bg = button:CreateTexture(nil, 'BACKGROUND')
+            bg:SetTexture(backgroundTexture)
+            bg:SetSize(sizeX, sizeY + 1)
+            bg:SetTexCoord(0.0654297, 0.12793, 0.330078, 0.490234)
+            bg:SetPoint('CENTER', dx, dy)
+            button.DragonUIBackground = bg
+
+            local bgPushed = button:CreateTexture(nil, 'BACKGROUND')
+            bgPushed:SetTexture(backgroundTexture)
+            bgPushed:SetSize(sizeX, sizeY + 1)
+            bgPushed:SetTexCoord(0.0654297, 0.12793, 0.494141, 0.654297)
+            bgPushed:SetPoint('CENTER', dx + offX, dy + offY)
+            bgPushed:Hide()
+            button.DragonUIBackgroundPushed = bgPushed
+
+            -- State tracking
+            button.dragonUIState = { pushed = false }
+            button.dragonUITimer = 0
+            button.dragonUILastState = false
+
+            button.HandleDragonUIState = function()
+                local state = button.dragonUIState
+                local hlTex = button:GetHighlightTexture()
+                if state and state.pushed then
+                    button.DragonUIBackground:Hide()
+                    button.DragonUIBackgroundPushed:Show()
+                    if hlTex then
+                        hlTex:ClearAllPoints()
+                        hlTex:SetPoint('TOPLEFT', button, 'TOPLEFT', offX, offY)
+                        hlTex:SetPoint('BOTTOMRIGHT', button, 'BOTTOMRIGHT', offX, offY)
+                    end
+                else
+                    button.DragonUIBackground:Show()
+                    button.DragonUIBackgroundPushed:Hide()
+                    if hlTex then
+                        hlTex:ClearAllPoints()
+                        hlTex:SetAllPoints(button)
+                    end
+                end
+            end
+            button.HandleDragonUIState()
+
+            button:SetScript('OnUpdate', function(self, elapsed)
+                if not self.dragonUITimer then
+                    self.dragonUITimer = 0
+                end
+                self.dragonUITimer = self.dragonUITimer + elapsed
+                if self.dragonUITimer >= 0.1 then
+                    self.dragonUITimer = 0
+                    local currentState = self:GetButtonState() == "PUSHED"
+                    if currentState ~= self.dragonUILastState then
+                        self.dragonUILastState = currentState
+                        if self.dragonUIState then
+                            self.dragonUIState.pushed = currentState
+                        end
+                        if self.HandleDragonUIState then
+                            self.HandleDragonUIState()
+                        end
+                    end
+                end
+            end)
+        end
+    end
+
     -- ============================================================================
     -- SECTION 6: MAIN SETUP FUNCTIONS
     -- ============================================================================
@@ -1964,9 +2086,10 @@ local function ApplyMicromenuSystem()
 
                 local isCharacterButton = (buttonName == "Character")
                 local isPVPButton = (buttonName == "PVP")
+                local isParagonButton = (buttonName == "Paragon")
 
-                local upCoords = not isCharacterButton and not isPVPButton and GetColoredTextureCoords(name, "Up") or nil
-                local shouldUseGrayscale = useGrayscale or (not isPVPButton and not upCoords and not isCharacterButton)
+                local upCoords = not isCharacterButton and not isPVPButton and not isParagonButton and GetColoredTextureCoords(name, "Up") or nil
+                local shouldUseGrayscale = useGrayscale or (not isPVPButton and not upCoords and not isCharacterButton and not isParagonButton)
 
                 if shouldUseGrayscale then
                     -- Grayscale icons
@@ -2002,6 +2125,8 @@ local function ApplyMicromenuSystem()
                     SetupPVPButton(button)
                 elseif isCharacterButton then
                     SetupCharacterButton(button)
+                elseif isParagonButton then
+                    SetupParagonButton(button)
                 else
                     -- Colored icons
                     local microTexture = 'Interface\\AddOns\\DragonUI\\Textures\\Micromenu\\uimicromenu2x'

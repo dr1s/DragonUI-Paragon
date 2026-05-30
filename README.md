@@ -1,5 +1,7 @@
 # 🐉 DragonUI for 3.3.5a
 
+> **Modified to work with [Paragon-Anniversary](https://github.com/Grim-Batol/Paragon-Anniversary)** — includes ParagonMicroButton integration and a DragonUI-styled paragon level indicator on the player frame.
+
 <div align="center">
 
 ![Interface Version](https://img.shields.io/badge/Interface-30300-blue)

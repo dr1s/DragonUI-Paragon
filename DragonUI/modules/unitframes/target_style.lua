@@ -384,7 +384,8 @@ function UF.TargetStyle.Create(opts)
         end
         if LevelText then
             LevelText:ClearAllPoints()
-            LevelText:SetPoint("BOTTOMRIGHT", HealthBar, "TOPLEFT", 18, 3)
+            LevelText:SetPoint("BOTTOMLEFT", HealthBar, "TOPLEFT", 0, 3)
+            LevelText:SetJustifyH("LEFT")
         end
         if NameBackground then
             ApplyNameBackgroundLayout()
@@ -867,13 +868,24 @@ function UF.TargetStyle.Create(opts)
 
         if LevelText then
             LevelText:ClearAllPoints()
-            LevelText:SetPoint("BOTTOMRIGHT", HealthBar, "TOPLEFT", 18, 3)
+            LevelText:SetPoint("BOTTOMLEFT", HealthBar, "TOPLEFT", 0, 3)
+            LevelText:SetJustifyH("LEFT")
             LevelText:SetDrawLayer("OVERLAY", 2)
             if opts.levelFontSize then
                 local font, _, flags = LevelText:GetFont()
                 if font and flags then
                     LevelText:SetFont(font, opts.levelFontSize, flags)
                 end
+            end
+        end
+
+        -- Use DragonUI target level text directly for combined "level / paragon" display
+        if LevelText and not TargetFrame.DragonUIParagonCombinedText then
+            TargetFrame.DragonUIParagonCombinedText = LevelText
+            -- Hide Paragon's visual frame using alpha (same as Paragon addon does) so OnUpdate still runs
+            local pFrame = _G.ParagonTargetLevel
+            if pFrame then
+                pFrame:SetAlpha(0)
             end
         end
 

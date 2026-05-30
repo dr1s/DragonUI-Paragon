@@ -628,6 +628,7 @@ local function DarkenMicroMenuBorders(tint)
         "AchievementMicroButton",
         "QuestLogMicroButton",
         "SocialsMicroButton",
+        "ParagonMicroButton",
         "PVPMicroButton",
         "LFDMicroButton",
         "MainMenuMicroButton",

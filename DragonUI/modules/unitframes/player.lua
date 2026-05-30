@@ -422,7 +422,8 @@ end
 -- Remove unwanted Blizzard frame elements
 local function RemoveBlizzardFrames(isVehicle)
     local elementsToHide = {"PlayerAttackIcon", "PlayerFrameBackground", "PlayerAttackBackground", "PlayerGuideIcon",
-                            "PlayerFrameGroupIndicatorLeft", "PlayerFrameGroupIndicatorRight"}
+                            "PlayerFrameGroupIndicatorLeft", "PlayerFrameGroupIndicatorRight",
+                            "ParagonCharacterLevel"}
 
     for _, name in ipairs(elementsToHide) do
         local obj = _G[name]
@@ -2094,6 +2095,14 @@ local function ChangePlayerframe()
     PlayerLevelText:SetAlpha(1)
     PlayerLevelText:Show()
 
+    -- Hide Paragon's level frame
+    if _G.ParagonCharacterLevel then
+        _G.ParagonCharacterLevel:Hide()
+    end
+
+    -- Use PlayerLevelText directly for combined "level / paragon" display
+    PlayerFrame.DragonUIParagonCombinedText = PlayerLevelText
+
     -- Configure health bar (fat mode uses full-width bar, vehicle uses standard)
     local fatMode = IsFatHealthbarActive() -- false during vehicle
     local HP_OFFSET = fatMode and 6 or 0
@@ -2864,6 +2873,36 @@ SetupPlayerClassColorHooks()
 
 -- Hide Blizzard texts after initialization
 HideBlizzardPlayerTexts()
+
+-- Combined level indicator update helper
+local function UpdateCombinedLevelIndicator()
+    if not PlayerFrame or not PlayerFrame.DragonUIParagonCombinedText then
+        return
+    end
+    -- Read character level from UnitLevel (hidden text returns empty)
+    local charLevel = tostring(UnitLevel("player"))
+    -- Read paragon level from Paragon addon's frame
+    local pLevel = 0
+    local levelFrame = _G.ParagonCharacterLevel
+    if levelFrame and levelFrame.Text then
+        pLevel = tonumber(levelFrame.Text:GetText()) or 0
+    end
+    if pLevel and pLevel > 0 then
+        PlayerFrame.DragonUIParagonCombinedText:SetText(charLevel .. " / " .. tostring(pLevel))
+    else
+        PlayerFrame.DragonUIParagonCombinedText:SetText(charLevel)
+    end
+end
+
+-- Periodically check for level changes
+local paragonUpdateFrame = CreateFrame("Frame")
+paragonUpdateFrame:SetScript("OnUpdate", function(self, elapsed)
+    self.timer = (self.timer or 0) + elapsed
+    if self.timer >= 0.5 then
+        self.timer = 0
+        UpdateCombinedLevelIndicator()
+    end
+end)
 
 -- ===============================================================
 -- HOOKS TO MAINTAIN POSITION DURING VEHICLE TRANSITIONS

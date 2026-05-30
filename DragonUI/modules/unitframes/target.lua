@@ -386,6 +386,30 @@ local api = UF.TargetStyle.Create({
         end
 
         InstallDetachedAuraLayoutHook()
+
+        -- Hook TargetFrame_Update to restore combined level text after Blizzard overwrites it
+        if _G.TargetFrame_Update then
+            hooksecurefunc("TargetFrame_Update", function()
+                if TargetFrame and TargetFrame.DragonUIParagonCombinedText then
+                    _G.DragonUI_UpdateTargetCombinedLevel()
+                end
+                -- Adjust target name width to avoid overlap with combined level text
+                if TargetFrame and TargetFrame.DragonUIParagonCombinedText and HealthBar then
+                    local levelText = TargetFrame.DragonUIParagonCombinedText
+                    local nameText = _G.TargetFrameTextureFrameName
+                    if levelText:GetText() and levelText:GetText() ~= "" and nameText then
+                        local levelWidth = levelText:GetStringWidth() or 0
+                        if levelWidth > 0 then
+                            local maxWidth = HealthBar:GetWidth() - levelWidth - 10
+                            if maxWidth > 0 then
+                                nameText:SetWidth(maxWidth)
+                                nameText:SetMaxLines(1)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
      end,
 
     -- ----------------------------------------------------------------
@@ -460,3 +484,50 @@ addon.unitframe.ReApplyTargetFrame  = api.Refresh
 function addon:RefreshTargetFrame()
     api.Refresh()
 end
+
+-- Hook Paragon's network handler to prevent it from showing its own frame
+if _G.UIParagon_OnReceiveTargetLevel then
+    hooksecurefunc("UIParagon_OnReceiveTargetLevel", function()
+        local pFrame = _G.ParagonTargetLevel
+        if pFrame then
+            pFrame:SetAlpha(0)
+        end
+    end)
+end
+
+-- Combined target level indicator update helper
+_G.DragonUI_UpdateTargetCombinedLevel = function()
+    if not TargetFrame or not TargetFrame.DragonUIParagonCombinedText then
+        return
+    end
+    local charLevel = ""
+    if UnitExists("target") then
+        local lvl = UnitLevel("target")
+        if lvl and lvl > 0 then
+            charLevel = tostring(lvl)
+        end
+    end
+    -- Only show paragon level for player targets (mobs should not have paragon)
+    local pLevel = 0
+    if UnitIsPlayer("target") then
+        local levelFrame = _G.ParagonTargetLevel
+        if levelFrame and levelFrame.Text then
+            pLevel = tonumber(levelFrame.Text:GetText()) or 0
+        end
+    end
+    if pLevel and pLevel > 0 then
+        TargetFrame.DragonUIParagonCombinedText:SetText(charLevel .. " / " .. tostring(pLevel))
+    else
+        TargetFrame.DragonUIParagonCombinedText:SetText(charLevel)
+    end
+end
+
+-- Periodically check for target level changes
+local targetParagonUpdateFrame = CreateFrame("Frame")
+targetParagonUpdateFrame:SetScript("OnUpdate", function(self, elapsed)
+    self.timer = (self.timer or 0) + elapsed
+    if self.timer >= 0.5 then
+        self.timer = 0
+        _G.DragonUI_UpdateTargetCombinedLevel()
+    end
+end)

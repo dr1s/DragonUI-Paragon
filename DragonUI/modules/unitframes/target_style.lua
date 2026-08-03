@@ -10,6 +10,22 @@ local UF = addon.UF
 
 UF.TargetStyle = {}
 
+-- 3.3.5a has no UNIT_POWER/UNIT_MAXPOWER; power changes fire one event per power token.
+local POWER_EVENTS = {
+    UNIT_MANA = true,
+    UNIT_RAGE = true,
+    UNIT_FOCUS = true,
+    UNIT_ENERGY = true,
+    UNIT_HAPPINESS = true,
+    UNIT_RUNIC_POWER = true,
+    UNIT_MAXMANA = true,
+    UNIT_MAXRAGE = true,
+    UNIT_MAXFOCUS = true,
+    UNIT_MAXENERGY = true,
+    UNIT_MAXHAPPINESS = true,
+    UNIT_MAXRUNIC_POWER = true,
+}
+
 -- ============================================================================
 -- FACTORY
 -- ============================================================================
@@ -43,6 +59,7 @@ function UF.TargetStyle.Create(opts)
     local NameBackground  = opts.nameBackground
     local namePrefix      = opts.namePrefix
     local DeadText        = opts.deadText or _G[namePrefix .. "FrameTextureFrameDeadText"]
+    local HighLevelTexture = _G[namePrefix .. "FrameTextureFrameHighLevelTexture"]
     local defaultPos      = opts.defaultPos
 
     -- Shared texture / constant tables from uf_core
@@ -52,7 +69,7 @@ function UF.TargetStyle.Create(opts)
 
     -- Name background color variants sourced from UIUnitFrame2x_PTR.blp.
     -- Coords extracted from the local PTR atlas (1024x512) and mapped by color.
-    local NAME_BG_PTR_TEXTURE = "Interface\\AddOns\\DragonUI\\Textures\\UIUnitFrame2x_PTR"
+    local NAME_BG_PTR_TEXTURE = "Interface\\AddOns\\DragonUI\\Textures\\UnitFrames\\Target\\UIUnitFrame2x_PTR"
     local NAME_BG_WIDTH = 135
     local NAME_BG_HEIGHT = 14
     local NAME_BG_OFFSET_X = -0.5
@@ -387,6 +404,10 @@ function UF.TargetStyle.Create(opts)
             LevelText:SetPoint("BOTTOMLEFT", HealthBar, "TOPLEFT", 0, 3)
             LevelText:SetJustifyH("LEFT")
         end
+        if HighLevelTexture and HealthBar then
+            HighLevelTexture:ClearAllPoints()
+            HighLevelTexture:SetPoint("BOTTOMRIGHT", HealthBar, "TOPLEFT", 18, 0)
+        end
         if NameBackground then
             ApplyNameBackgroundLayout()
         end
@@ -491,6 +512,52 @@ function UF.TargetStyle.Create(opts)
                 end
             end)
             BlizzFrame.DragonUI_PortraitHook = true
+        end
+
+        -- Vanilla routes the bars through TextStatusBar, skipping UnitFrame_OnEnter's newbie tip.
+        if not BlizzFrame.DragonUI_BarTooltipHook then
+            local overBar
+
+            local function IsOverBar()
+                return ((HealthBar:IsVisible() and HealthBar:IsMouseOver())
+                    or (ManaBar:IsVisible() and ManaBar:IsMouseOver())) and true or false
+            end
+
+            local function ApplyTooltip()
+                if overBar then
+                    UnitFrame_UpdateTooltip(BlizzFrame)
+                else
+                    -- Newbie tips never install UpdateTooltip; a stale one would swap the tip out mid-hover.
+                    BlizzFrame.UpdateTooltip = nil
+                    UnitFrame_OnEnter(BlizzFrame)
+                end
+            end
+
+            -- Only reacts to crossing the bar edge; rebuilding on a timer flickers the tooltip.
+            local watcher = CreateFrame("Frame")
+            watcher:Hide()
+            watcher:SetScript("OnUpdate", function(self)
+                if not BlizzFrame:IsMouseOver() then
+                    self:Hide()
+                    return
+                end
+                local now = IsOverBar()
+                if now ~= overBar then
+                    overBar = now
+                    ApplyTooltip()
+                end
+            end)
+
+            BlizzFrame:HookScript("OnEnter", function()
+                overBar = IsOverBar()
+                ApplyTooltip()
+                watcher:Show()
+            end)
+            BlizzFrame:HookScript("OnLeave", function()
+                watcher:Hide()
+            end)
+
+            BlizzFrame.DragonUI_BarTooltipHook = true
         end
 
         -- Hook afterBarHooks callback if provided
@@ -839,6 +906,9 @@ function UF.TargetStyle.Create(opts)
         Portrait:SetPoint("TOPRIGHT", BlizzFrame, "TOPRIGHT", -47, -15)
         Portrait:SetDrawLayer("ARTWORK", 0)
 
+        -- TargetFrame's OnLoad cuts 96px off its left hit rect; undo it so the button covers the bars.
+        BlizzFrame:SetHitRectInsets(0, 40, 10, 20)
+
         -- ---- Configure health bar ----
         -- Frame level -1 keeps bar fills below portrait area (level 0)
         -- so the mana bar overlap doesn't render on top of the portrait.
@@ -877,6 +947,10 @@ function UF.TargetStyle.Create(opts)
                     LevelText:SetFont(font, opts.levelFontSize, flags)
                 end
             end
+        end
+        if HighLevelTexture and HealthBar then
+            HighLevelTexture:ClearAllPoints()
+            HighLevelTexture:SetPoint("BOTTOMRIGHT", HealthBar, "TOPLEFT", 18, 0)
         end
 
         -- Use DragonUI target level text directly for combined "level / paragon" display
@@ -1207,8 +1281,7 @@ function UF.TargetStyle.Create(opts)
                 Module.textSystem.update()
             end
 
-        elseif event == "UNIT_POWER_UPDATE"
-            or event == "UNIT_MAXPOWER" then
+        elseif POWER_EVENTS[event] then
             local unit = ...
             if unit == unitToken and UnitExists(unitToken) then
                 ForceUpdatePowerBar()
@@ -1239,8 +1312,9 @@ function UF.TargetStyle.Create(opts)
         ef:RegisterEvent("UNIT_FACTION")
         ef:RegisterEvent("UNIT_HEALTH")
         ef:RegisterEvent("UNIT_MAXHEALTH")
-        ef:RegisterEvent("UNIT_POWER_UPDATE")
-        ef:RegisterEvent("UNIT_MAXPOWER")
+        for ev in pairs(POWER_EVENTS) do
+            ef:RegisterEvent(ev)
+        end
         ef:RegisterEvent("UNIT_DISPLAYPOWER")
 
         -- Register additional per-module events
@@ -1256,6 +1330,43 @@ function UF.TargetStyle.Create(opts)
     -- ================================================================
     -- PUBLIC API: Refresh / Reset
     -- ================================================================
+
+    -- Wrap the container so castbar.lua's own Show/Hide/alpha fades never fight our visibility state.
+    local castbarWrapper
+
+    -- Target/Focus share one visibility toggle with their ToT/ToF and cast bar, anchored or not.
+    local function SyncVisibilityFade()
+        if not addon.VisibilityFade then return end
+
+        -- Skip native spellbar: castbar.lua already hides it, fading it here undid that.
+        local extraFrames, hoverFrames = {}, { BlizzFrame }
+        if configKey == "target" then
+            if _G.TargetFrameToT then table.insert(extraFrames, _G.TargetFrameToT); table.insert(hoverFrames, _G.TargetFrameToT) end
+        elseif configKey == "focus" then
+            if _G.FocusFrameToT then table.insert(extraFrames, _G.FocusFrameToT); table.insert(hoverFrames, _G.FocusFrameToT) end
+        end
+
+        local castbarFrames = addon.CastbarModule and addon.CastbarModule.frames
+        local castbarContainer = castbarFrames and castbarFrames[configKey] and castbarFrames[configKey].container
+        if castbarContainer then
+            if not castbarWrapper then
+                castbarWrapper = CreateFrame("Frame", nil, UIParent)
+            end
+            if castbarContainer:GetParent() ~= castbarWrapper then
+                castbarContainer:SetParent(castbarWrapper)
+            end
+            table.insert(extraFrames, castbarWrapper)
+            table.insert(hoverFrames, castbarContainer)
+        end
+
+        addon.VisibilityFade.Register(configKey, BlizzFrame, {
+            frames = extraFrames,
+            dbTable = GetConfig,
+            hoverFrames = hoverFrames,
+            clickThrough = true,
+        })
+        addon.VisibilityFade.Update(configKey)
+    end
 
     local function RefreshFrame()
         if not Module.configured then
@@ -1284,6 +1395,8 @@ function UF.TargetStyle.Create(opts)
             ForceUpdatePowerBar()
             if Module.textSystem then Module.textSystem.update() end
         end
+
+        SyncVisibilityFade()
     end
 
     local function ResetFrame()

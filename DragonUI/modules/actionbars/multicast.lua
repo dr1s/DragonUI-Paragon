@@ -67,6 +67,10 @@ local function GetTotemConfig()
     return addon.db.profile.additional.totem
 end
 
+local function IsModuleEnabled()
+    return addon:IsModuleEnabled("multicast")
+end
+
 -- =============================================================================
 -- DYNAMIC ANCHOR SYSTEM
 -- Anchors totem bar based on which action bars are visible:
@@ -367,33 +371,58 @@ local function SetupShamanMulticast()
     -- Apply initial scale and spacing to the PARENT frame
     PositionTotemButtons()
     
+    -- Slot/flyout buttons are created on demand; rescan so click-through covers each one too.
+    -- MultiCastActionButtonN (not MultiCastSlotButtonN) is the real clickable/castable totem button.
+    local function SyncTotemHoverButtons()
+        if not addon.VisibilityFade then return end
+        local found = {}
+        for i = 1, (NUM_MULTI_CAST_PAGES or 6) * NUM_MULTI_CAST_BUTTONS_PER_PAGE do
+            local actionBtn = _G['MultiCastActionButton' .. i]
+            if actionBtn then table.insert(found, actionBtn) end
+        end
+        for i = 1, 20 do
+            local slotBtn = _G['MultiCastSlotButton' .. i]
+            if slotBtn then table.insert(found, slotBtn) end
+            local flyoutBtn = _G['MultiCastFlyoutButton' .. i]
+            if flyoutBtn then table.insert(found, flyoutBtn) end
+        end
+        if _G.MultiCastFlyoutFrameOpenButton then table.insert(found, _G.MultiCastFlyoutFrameOpenButton) end
+        if _G.MultiCastFlyoutFrame then table.insert(found, _G.MultiCastFlyoutFrame) end
+        if #found > 0 then
+            addon.VisibilityFade.AddHoverFrames("totembar", found)
+        end
+    end
+
     -- Hook Blizzard update functions to maintain our custom spacing
     if not MulticastModule.hooks.buttonUpdate then
         MulticastModule.hooks.buttonUpdate = true
-        
+
         -- When Blizzard updates button positions, re-apply our spacing
         hooksecurefunc('MultiCastSummonSpellButton_Update', function()
             if not InCombatLockdown() then
                 PositionTotemButtons()
+                SyncTotemHoverButtons()
                 if addon.RefreshAdditionalBarHotkeys then
                     addon.RefreshAdditionalBarHotkeys()
                 end
             end
         end)
-        
+
         hooksecurefunc('MultiCastRecallSpellButton_Update', function()
             if not InCombatLockdown() then
                 PositionTotemButtons()
+                SyncTotemHoverButtons()
                 if addon.RefreshAdditionalBarHotkeys then
                     addon.RefreshAdditionalBarHotkeys()
                 end
             end
         end)
-        
+
         -- Hook slot updates too
         hooksecurefunc('MultiCastSlotButton_Update', function()
             if not InCombatLockdown() then
                 PositionTotemButtons()
+                SyncTotemHoverButtons()
                 if addon.RefreshAdditionalBarHotkeys then
                     addon.RefreshAdditionalBarHotkeys()
                 end
@@ -433,13 +462,43 @@ local function SetupShamanMulticast()
         MulticastModule.stateDrivers.visibility = {frame = totembar, state = 'visibility', condition = visCondition}
         RegisterStateDriver(totembar, 'visibility', visCondition)
     end
+
+    -- Hover/combat fade layered on top of the state driver above (alpha-only, never Show/Hide).
+    -- Individual buttons are listed (not just MultiCastActionBarFrame) because EnableMouse
+    -- doesn't cascade to children — click-through needs each one's own mouse disabled too.
+    -- MultiCastActionButtonN (SecureActionButtonTemplate) is the real castable button, not MultiCastSlotButtonN.
+    if addon.VisibilityFade then
+        local hoverFrames = { totembar }
+        if _G.MultiCastActionBarFrame then table.insert(hoverFrames, _G.MultiCastActionBarFrame) end
+        if MultiCastSummonSpellButton then table.insert(hoverFrames, MultiCastSummonSpellButton) end
+        if MultiCastRecallSpellButton then table.insert(hoverFrames, MultiCastRecallSpellButton) end
+        for i = 1, (NUM_MULTI_CAST_PAGES or 6) * NUM_MULTI_CAST_BUTTONS_PER_PAGE do
+            local actionBtn = _G['MultiCastActionButton' .. i]
+            if actionBtn then table.insert(hoverFrames, actionBtn) end
+        end
+        for i = 1, NUM_MULTI_CAST_BUTTONS_PER_PAGE do
+            local btn = _G['MultiCastSlotButton' .. i]
+            if btn then table.insert(hoverFrames, btn) end
+        end
+        -- The "deploy totems" flyout (per-element totem choices) lives outside totembar's bounds.
+        if _G.MultiCastFlyoutFrameOpenButton then table.insert(hoverFrames, _G.MultiCastFlyoutFrameOpenButton) end
+        if _G.MultiCastFlyoutFrame then table.insert(hoverFrames, _G.MultiCastFlyoutFrame) end
+        addon.VisibilityFade.Register("totembar", totembar, {
+            dbTable = function() return addon.db and addon.db.profile and addon.db.profile.additional and addon.db.profile.additional.totem end,
+            hoverFrames = hoverFrames,
+            clickThrough = true,
+        })
+        addon.VisibilityFade.Update("totembar")
+    end
 end
 
 -- =============================================================================
 -- UNIFIED REFRESH FUNCTION (using SCALE, not SetSize)
 -- =============================================================================
 function addon.RefreshMulticast(fullRefresh)
-    if InCombatLockdown() or UnitAffectingCombat("player") then 
+    if not IsModuleEnabled() then return end
+
+    if InCombatLockdown() or UnitAffectingCombat("player") then
         addon.CombatQueue:Add(fullRefresh and "multicast_RefreshFull" or "multicast_Refresh", function()
             addon.RefreshMulticast(fullRefresh)
         end)
@@ -453,19 +512,18 @@ function addon.RefreshMulticast(fullRefresh)
     if fullRefresh then
         PositionTotemButtons()
     end
+
+    if addon.VisibilityFade then
+        addon.VisibilityFade.Update("totembar")
+    end
 end
 
--- Full rebuild
-function addon.RefreshMulticastFull()
-    if InCombatLockdown() or UnitAffectingCombat("player") then return end
-    addon.RefreshMulticast(true)
-end
 
 -- =============================================================================
 -- APPLY SYSTEM FUNCTION
 -- =============================================================================
 local function ApplyMulticastSystem()
-    if MulticastModule.applied then return end
+    if MulticastModule.applied or not IsModuleEnabled() then return end
     
     -- Create frames
     CreateMulticastFrames()
@@ -567,15 +625,15 @@ local function RegisterEvents()
         if event == "ADDON_LOADED" and addonName == "DragonUI" then
             -- Initialize multicast system as early as possible
             if addon.core and addon.core.RegisterMessage then
-                addon.core.RegisterMessage(addon, "DRAGONUI_READY", ApplyMulticastSystem)
+                addon.core.RegisterMessage(MulticastModule, "DRAGONUI_READY", ApplyMulticastSystem)
             end
             
             -- Register profile callbacks
             DelayedCall(0.5, function()
                 if addon.db and addon.db.RegisterCallback then
-                    addon.db.RegisterCallback(addon, "OnProfileChanged", OnProfileChanged)
-                    addon.db.RegisterCallback(addon, "OnProfileCopied", OnProfileChanged)
-                    addon.db.RegisterCallback(addon, "OnProfileReset", OnProfileChanged)
+                    addon.db.RegisterCallback(MulticastModule, "OnProfileChanged", OnProfileChanged)
+                    addon.db.RegisterCallback(MulticastModule, "OnProfileCopied", OnProfileChanged)
+                    addon.db.RegisterCallback(MulticastModule, "OnProfileReset", OnProfileChanged)
                 end
             end)
             

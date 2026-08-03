@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- DragonUI - Database Defaults
 -- Defines default profile values for AceDB-3.0. All configurable settings
 -- live here as the single source of truth for new/reset profiles.
@@ -11,7 +11,10 @@ local _arialn = addon.Fonts and addon.Fonts.ARIALN or "Fonts\\ARIALN.TTF"
 
 local defaults = {
     global = {
-        combuctorCache = {} -- Per-character bank snapshot (realm|name keys); used by combuctor module
+        bagsterCache = {}, -- Per-character bank snapshot (realm|name keys); used by bagster module
+        characterMoney = {}, -- Gold per character (realm|name keys); used by the altmoney tooltip
+        questLootLearned = {}, -- Learned quest loot sources for nameplates: [mobName] = {objectiveText=true}
+        auraDurations = {} -- Observed debuff durations for nameplates: [spellId] = seconds
     },
     profile = {
         version = 1,
@@ -52,6 +55,12 @@ local defaults = {
                 anchor = "TOPRIGHT",
                 posX = -100,
                 posY = -15,
+                custom_position = false
+            },
+            debuffs = {
+                anchor = "TOPRIGHT",
+                posX = -270,
+                posY = -75,
                 custom_position = false
             },
             pet = {
@@ -161,6 +170,13 @@ local defaults = {
                 posX = 0,
                 posY = 160,
                 custom_position = false
+            },
+            positionPresetPanel = {
+                anchor = "TOP",
+                posX = 0,
+                posY = 144,
+                relativePoint = "CENTER",
+                custom_position = false
             }
         },
         -- Quest Tracker
@@ -170,12 +186,16 @@ local defaults = {
             y = -255,
             show_header = true,
             font_size = 12,      -- Point size for quest tracker text (WoW default: 11)
+            show_on_hover = false,
+            show_in_combat = false,
+            hide_in_combat = false,
+            visibility_logic = "and",
         },
         -- Loot Roll
         lootroll = {
             anchor = "BOTTOM",
             x = 0,
-            y = 200,
+            y = 220,
         },
         -- ACTIONBAR SETTINGS
         mainbars = {
@@ -183,33 +203,49 @@ local defaults = {
             player = {
                 rows = 1,
                 columns = 12,
-                buttons_shown = 12
+                buttons_shown = 12,
+                button_spacing = 7,
+                change_button_order = false,
+                button_order = "top_left"
             },
             left = {
                 horizontal = false,
                 rows = 12,
                 columns = 1,
-                buttons_shown = 12
+                buttons_shown = 12,
+                button_spacing = 7,
+                change_button_order = false,
+                button_order = "top_left"
             },
             right = {
                 horizontal = false,
                 rows = 12,
                 columns = 1,
-                buttons_shown = 12
+                buttons_shown = 12,
+                button_spacing = 7,
+                change_button_order = false,
+                button_order = "top_left"
             },
             bottom_left = {
                 rows = 1,
                 columns = 12,
-                buttons_shown = 12
+                buttons_shown = 12,
+                button_spacing = 7,
+                change_button_order = false,
+                button_order = "top_left"
             },
             bottom_right = {
                 rows = 1,
                 columns = 12,
-                buttons_shown = 12
+                buttons_shown = 12,
+                button_spacing = 7,
+                change_button_order = false,
+                button_order = "top_left"
             },
 
-            -- Global button spacing (gap between buttons in pixels)
+            -- Legacy global spacing; kept as migration source for per-bar button_spacing
             button_spacing = 7,
+            spacing_migrated = false,
 
             -- Per-bar scales
             scale_actionbar = 0.9,
@@ -252,27 +288,36 @@ local defaults = {
             -- Hover/combat visibility per bar
             main_show_on_hover = false,
             main_show_in_combat = false,
+            main_hide_in_combat = false,
             main_visibility_logic = "and",
             bottom_left_show_on_hover = false,
             bottom_left_show_in_combat = false,
+            bottom_left_hide_in_combat = false,
             bottom_left_visibility_logic = "and",
             bottom_right_show_on_hover = false,
             bottom_right_show_in_combat = false,
+            bottom_right_hide_in_combat = false,
             bottom_right_visibility_logic = "and",
             right_show_on_hover = false,
             right_show_in_combat = false,
+            right_hide_in_combat = false,
             right_visibility_logic = "and",
             left_show_on_hover = false,
             left_show_in_combat = false,
+            left_hide_in_combat = false,
             left_visibility_logic = "and",
-            
+
 
             -- Micro menu and bag bar visibility
+            micro_always_hidden = false,
             micro_show_on_hover = false,
             micro_show_in_combat = false,
+            micro_hide_in_combat = false,
             micro_visibility_logic = "and",
+            bag_always_hidden = false,
             bag_show_on_hover = false,
             bag_show_in_combat = false,
+            bag_hide_in_combat = false,
             bag_visibility_logic = "and"
         },
 
@@ -288,7 +333,9 @@ local defaults = {
                 scale_menu = 1.5,
                 x_position = 5,
                 y_position = -54,
-                icon_spacing = 15 -- Gap between icons
+                icon_spacing = 15, -- Migrated from old stride to padding on first load
+                columns = 12, -- 1 = vertical; high = single row
+                invert_order = false,
             },
 
             -- Normal colored icons configuration  
@@ -296,14 +343,17 @@ local defaults = {
                 scale_menu = 0.9,
                 x_position = -113,
                 y_position = -53,
-                icon_spacing = 26
+                icon_spacing = 26, -- Migrated from old stride to padding on first load
+                columns = 12, -- 1 = vertical; high = single row
+                invert_order = false,
             }
         },
 
         bags = {
             scale = 1,
             x_position = 1,
-            y_position = 41
+            y_position = 41,
+            tint_unusable = true, -- Red icon tint for gear/Use items the player cannot use
         },
 
         xprepbar = {
@@ -330,10 +380,18 @@ local defaults = {
             always_show_text = false,
             show_xp_percent = false,
             show_rep_text_on_hover = true,
+            -- Hover/combat visibility (shared by both bars, see core/visibility_fade.lua)
+            show_on_hover = false,
+            show_in_combat = false,
+            hide_in_combat = false,
+            visibility_logic = "and",
         },
 
         style = {
             gryphons = 'new',
+            gryphonScale = 1,
+            gryphonOffsetX = 0,
+            gryphonOffsetY = 0,
             xpbar = 'dragonflightui',
             exhaustion_tick = true -- Show exhaustion tick (on by default)
         },
@@ -352,7 +410,9 @@ local defaults = {
                 show = true,
                 range = true,
                 shadow = {0, 0, 0, 1},
-                font = {_arialn, 12, "OUTLINE"}
+                color = {0.6, 0.6, 0.6, 1},
+                font = {_arialn, 12, "OUTLINE"},
+                font_size = 12,
             },
             macros = {
                 show = true,
@@ -381,12 +441,18 @@ local defaults = {
                 y_offset = -58, -- Additional Y offset for fine-tuning position
                 button_size = 31, -- Size of stance buttons (native Blizzard size)
                 button_spacing = 6, -- Spacing between stance buttons
-                show_hotkey = false
+                show_hotkey = false,
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
             },
             pet = {
                 scale = 1.0,
                 grid = false, -- Disable grid by default (matches original Dragonflight port)
-                show_hotkey = false
+                show_hotkey = false,
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
             },
             vehicle = {
                 x_position = -40,
@@ -399,7 +465,25 @@ local defaults = {
                 button_size = 34, -- Size of totem buttons (native Blizzard size)
                 button_spacing = 4, -- Spacing between totem buttons
                 manual_position = false, -- When true, uses x_position/y_offset; when false, auto-anchors to action bars
-                show_hotkey = false
+                show_hotkey = false,
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
+            },
+            extrabar1 = {
+                x_position = 0,
+                y_position = 260,
+                scale = 0.9, -- container SetScale, like mainbars scale_actionbar
+                size = 36,
+                spacing = 7, -- match mainbars.button_spacing / per-bar default
+                columns = 12, -- 12 = single row
+                buttons_shown = 12,
+                change_button_order = false,
+                button_order = "bottom_left",
+                show_hotkey = true, -- default on: no well-known native binds like pet/stance
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
             }
         },
 
@@ -427,17 +511,34 @@ local defaults = {
             animated_border_opacity = 1,
             animated_border_hide_dragonui_border = false,
             addon_button_skin = true,
-            addon_button_fade = false
+            addon_button_fade = false,
+            show_on_hover = false,
+            show_in_combat = false,
+            hide_in_combat = false,
+            visibility_logic = "and",
         },
 
-        --  BUFFS SETTINGS (NEW)
+        --  BUFFS SETTINGS 
         buffs = {
             enabled = true,
             show_toggle_button = true,
             buffs_hidden = false,
             separate_weapon_enchants = false,
             buff_horizontal_gap = 0,
-            debuff_horizontal_gap = 0
+            debuff_horizontal_gap = 0,
+            buff_scale = 1,
+            debuff_scale = 1,
+            buffs_per_row = 12,
+            debuffs_per_row = 12,
+            max_buff_rows = 0,
+            max_debuff_rows = 0,
+            buff_vertical_gap = 15,
+            debuff_vertical_gap = 15,
+            debuff_offset_y = 60,
+            buff_order = "blizzard",
+            layout_preview = false,
+            layout_preview_buffs = 40,
+            layout_preview_debuffs = 16,
         },
 
         -- CASTBAR SETTINGS
@@ -451,6 +552,7 @@ local defaults = {
             sizeY = 16,
             showIcon = false,
             sizeIcon = 27,
+            modernIconBorder = true,
             holdTime = 0.3,
             holdTimeInterrupt = 0.8,
 
@@ -475,6 +577,7 @@ local defaults = {
                 sizeY = 10,
                 showIcon = true,
                 sizeIcon = 20,
+                modernIconBorder = true,
                 holdTime = 0.3,
                 holdTimeInterrupt = 0.8,
                 anchorFrame = 'TargetFrame',
@@ -497,6 +600,7 @@ local defaults = {
                 sizeY = 10,
                 showIcon = true,
                 sizeIcon = 20,
+                modernIconBorder = true,
                 holdTime = 0.3,
                 holdTimeInterrupt = 0.8,
                 anchorFrame = 'FocusFrame',
@@ -551,6 +655,9 @@ local defaults = {
                     RUNES        = { r = 0.50, g = 0.50, b = 0.50 },
                     RUNIC_POWER  = { r = 0.00, g = 0.82, b = 1.00 },
                 },
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
             },
             target = {
                 classcolor = false,
@@ -563,7 +670,11 @@ local defaults = {
                 enableNumericThreat = true,
                 enableThreatGlow = true,
                 show_name_background = true,
-                scale = 1.0
+                scale = 1.0,
+                -- Also fades Target of Target and the target cast bar (see target_style.lua)
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
             },
             focus = {
                 classcolor = false,
@@ -575,7 +686,11 @@ local defaults = {
                 showManaTextAlways = false,
                 show_buff_debuff = true,
                 show_name_background = true,
-                scale = 0.9
+                scale = 0.9,
+                -- Also fades Target of Focus and the focus cast bar (see target_style.lua)
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
             },
             pet = {
                 breakUpLargeNumbers = true,
@@ -584,9 +699,12 @@ local defaults = {
                 showManaTextAlways = false,
                 enableThreatGlow = false,
                 scale = 1.0,
-                override = true,
-                x = 0,
-                y = 0
+                override = false,
+                x = 18,
+                y = -80,
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
             },
             party = {
                 enabled = true,
@@ -603,7 +721,10 @@ local defaults = {
                 anchor = 'TOPLEFT',
                 anchorParent = 'TOPLEFT',
                 x = 10,
-                y = -200
+                y = -200,
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
             },
             tot = {
                 classcolor = false,
@@ -612,10 +733,6 @@ local defaults = {
                 scale = 1.0,
                 x = -27,
                 y = -14,
-                textFormat = 'numeric',
-                breakUpLargeNumbers = false,
-                showHealthTextAlways = false,
-                showManaTextAlways = false,
                 override = false,
                 anchor = 'BOTTOMRIGHT',
                 anchorParent = 'BOTTOMRIGHT',
@@ -628,10 +745,6 @@ local defaults = {
                 scale = 1.0,
                 x = -27,
                 y = -14,
-                textFormat = 'numeric',
-                breakUpLargeNumbers = false,
-                showHealthTextAlways = false,
-                showManaTextAlways = false,
                 override = false,
                 anchor = 'BOTTOMRIGHT',
                 anchorParent = 'BOTTOMRIGHT',
@@ -640,12 +753,14 @@ local defaults = {
             boss = {
                 enabled = true,
                 scale = 1.0,
-                classcolor = false,
                 override = false,
                 anchor = 'TOPRIGHT',
                 anchorParent = 'TOPRIGHT',
                 x = -85,
-                y = -350
+                y = -350,
+                show_on_hover = false,
+                show_in_combat = false,
+                visibility_logic = "and",
             }
         },
 
@@ -694,7 +809,9 @@ local defaults = {
                 }
             },
             rage_indicator = {
-                enabled = true -- Tint action button icons by range and usability
+                enabled = true, -- Tint action button icons by range and usability
+                oor_color = { r = 0.8, g = 0.2, b = 0.2 }, -- out of range
+                oom_color = { r = 0.5, g = 0.5, b = 1.0 } -- not enough mana
             },
             buttons = {
                 enabled = true -- Apply DragonUI button styling and enhancements
@@ -711,6 +828,9 @@ local defaults = {
             multicast = {
                 enabled = true -- Apply DragonUI multicast (totem/possess) bar positioning and styling
             },
+            extrabar1 = {
+                enabled = false -- opt-in standalone bar (#330); Options → Action Bars → Visibility
+            },
             micromenu = {
                 enabled = true -- Apply DragonUI micro menu and bags system styling and positioning
             },
@@ -726,6 +846,13 @@ local defaults = {
             buffs = {
                 enabled = true -- Enable DragonUI buff frame with custom styling, positioning, and toggle button functionality
             },
+            auraborders = {
+                enabled = true, -- Modern DF-style borders on buff/debuff icons (player/target/focus)
+                buff_color = { r = 0.2, g = 0.2, b = 0.2 }, -- neutral buff chrome over white mask; debuffs use dispel-type color
+                custom_border = true, -- border style: true = rounded (custom texture overlay), false = square (solid lines)
+                -- When true, login ApplyDarkMode must not overwrite buff_color (user set it in Auras).
+                buff_color_user_override = false,
+            },
             keybinding = {
                 enabled = true, -- Enable LibKeyBound integration for intuitive keybinding (hover + key press)
                 auto_register_action_buttons = true -- Automatically make action buttons bindable
@@ -733,11 +860,185 @@ local defaults = {
             questtracker = {
                 enabled = true -- Enable DragonUI quest tracker positioning and styling
             },
+            keypress = {
+                enabled = false -- Fire action-bar abilities on key down instead of key release (SnowfallKeyPress-style)
+            },
             darkmode = {
                 enabled = false, -- Apply darker tinted textures to UI chrome
                 intensity_preset = 3, -- 1 = Light, 2 = Medium, 3 = Dark
                 use_custom_color = false, -- Override presets with custom color
                 custom_color = { r = 0.15, g = 0.15, b = 0.15 } -- Custom tint RGB
+            },
+            nameplates = {
+                enabled = true,
+                barWidth = 150, -- ~Blizzard plate width
+                barHeight = 9, -- height of the nameplate in pixels
+                fontSize = 2, -- Scale 1-10, maps to name/HP font px
+                nameFont = "primary", -- font for name/level text (primary, actionbar, narrow, arial, system)
+                showHealthPercent = true,
+                showHealthNumber = false, -- show HP as a number (e.g. 22k) plus percent on the health bar
+                healthNumberFontSize = 2, -- Scale 1-10, maps to health-number font px
+                nameOverlayHealthBar = false, -- anchor name/level/percent/elite icon centered on the health bar instead of above it
+                nameOverlayOffsetY = 0, -- vertical (Y) offset applied when nameOverlayHealthBar is enabled
+                nameRowPaddingX = 0, -- horizontal inset (left & right) applied to name/level/percent row; does not affect the elite icon
+                eliteIconOffsetY = 0, -- additional vertical offset for the elite/rare icon, independent of the name row / overlay offset
+                healthBarBackground = "black", -- black | castbar. "black" uses the dedicated bar-bg-health texture (hand-editable copy); "castbar" reuses bar-bg.
+                showPowerBar = false,
+                showPowerBarText = true, -- show numeric values on power bar
+                powerPlayersOnly = false, -- Hide mana on NPCs
+                powerBarBackground = "black", -- black | castbar. "black" uses the dedicated bar-bg-power texture (hand-editable copy); "castbar" reuses bar-bg.
+                showCastBar = true,
+                castBarOffTargetMode = "safe", -- off | safe | aggressive | hybrid. UI: enable=safe, +aggressive=aggressive, +players-only=hybrid
+                castBarHidePetCasts = true, -- all modes: hide cast bars on player pets/guardians (Water Elemental, mirror images, etc.)
+                castBarOffTarget = false, -- legacy mirror of aggressive mode
+                castBarOffTargetHostileOnly = false, -- legacy reaction filter (no longer exposed in UI; 3.3.5a shows enemy OR ally plates only)
+                castBarOffTargetSafeOnly = true, -- legacy mirror of safe mode (now the default)
+                castBarPvPAggressive = false, -- legacy reaction filter (no longer exposed in UI)
+                showPartyRaidCastBars = false, -- show cast bars on party/raid member nameplates
+                castBarModernIconBorder = true, -- action-bar style frame around the cast icon
+                castBarHeight = 9, -- height of the cast bar in pixels
+                castBarGap = 3, -- vertical gap between health, power, and cast bars
+                showCastBarSpellName = false, -- show the spell name text on the cast bar
+                castBarSpellNameFontSize = 9, -- font size for the cast bar spell name text
+                castBarSpellNameOffsetX = 0, -- horizontal offset for the cast bar spell name text
+                castBarSpellNameOffsetY = 0, -- vertical offset for the cast bar spell name text
+                threatGlow = true, -- show threat glow indicator (colored border)
+                tankMode = false, -- invert threat colors for a tank perspective (holding aggro = green)
+                dpsMode = false, -- ThreatPlates-style DPS threat colors (in combat); exclusive with tankMode
+                raidMarkHealthColor = false, -- tint health bar by raid marker, allies and enemies alike
+                tapDeniedGray = true, -- gray health bar when unit is tapped by another player/group (GUID memory)
+                showTargetHighlight = true,
+                showTargetArrows = false,
+                showDebuffs = true,
+                maxDebuffs = 5,
+                debuffIconSize = 24, -- debuff icon size in pixels
+                showDebuffCooldown = true, -- show remaining debuff time text on icons
+                debuffCooldownSwipe = true, -- also show a radial cooldown swipe on debuff icons
+                debuffCooldownSwipeStyle = "squareSwirl", -- "vertical" | "pie" | "squareSwirl"
+                debuffCooldownFontSize = 10, -- font size for debuff remaining time text
+                debuffCooldownTextAnchor = "center", -- "center" | "topleft" | "topright" | "bottomleft" | "bottomright"
+                debuffOnlyTargetFocus = false, -- only show debuffs on target/focus plates
+                debuffOnlyMine = false, -- only show debuffs the player applied
+                debuffIncludeOtherCC = true, -- let anyone's crowd control through the "only mine" filter
+                debuffFilterMode = "all", -- "all" | "whitelist" | "blacklist"
+                debuffFilterList = "", -- comma-separated spell IDs for whitelist/blacklist
+                debuffModernIconBorder = true, -- action-bar style frame around debuff icons
+                debuffHighlightCC = true, -- colored border by aura category (crowd control, defensive, dispel type)
+                showBuffs = false, -- show enemy buffs in the same row as debuffs, ordered by rank
+                buffFilterMode = "purgeable", -- "purgeable" | "all" | "whitelist" | "blacklist"
+                buffFilterList = "", -- comma-separated spell IDs for whitelist/blacklist
+                -- Editable so the panel can show exactly which buffs count as defensive.
+                defensiveBuffList = "642,1022,5599,10278,498,5573,45438,48707,48792,31224,5277,19263,23920,871,12975,22812,61336,33206,47585,46924,8178,51690,1719,12292,47788,6940,64205,70940,3411,55694,30823,55233,49222,19574,34471,53480,45182,66,5384",
+                ccExtraList = "", -- extra spell IDs treated as crowd control on top of the built-in list
+                showFriendlyAuras = false, -- show auras on friendly plates (never "all", always a criterion)
+                friendlyIncludeCC = true, -- also show crowd control on allies, listed or not
+                friendlyIncludeDefensive = true, -- also show the defensive cooldowns from defensiveBuffList
+                friendlyIncludeAllDebuffs = false, -- show every debuff on allies, not just the curated ones
+                -- Battleground flags and support cooldowns: what you want to spot on an ally at a glance.
+                friendlyAuraFilterList = "23333,23335,34976,29166,10060,2825,32182,53563,1044,6940,47788,64843,31821",
+                auraSortMode = "priority", -- "priority" (own CC first) | "chronological" (expiration only)
+                auraHighlightMode = "cc", -- which auras draw larger: "cc" | "list" | "ccAndList" | "none"
+                auraHighlightList = "", -- extra spell IDs drawn at the highlight size
+                auraHighlightScale = 1.35, -- size multiplier for highlighted auras
+                auraColorCCEnabled = false, -- give crowd control its own color instead of its dispel type
+                -- Blizzard's DebuffTypeColor values, editable. "none" is what a debuff with no dispel type uses.
+                auraColors = {
+                    none = { r = 0.80, g = 0, b = 0 },
+                    Magic = { r = 0.20, g = 0.60, b = 1.00 },
+                    Curse = { r = 0.60, g = 0.00, b = 1.00 },
+                    Disease = { r = 0.60, g = 0.40, b = 0 },
+                    Poison = { r = 0.00, g = 0.60, b = 0 },
+                    Enrage = { r = 1.00, g = 0.55, b = 0.15 },
+                    Buff = { r = 0.35, g = 0.70, b = 1.00 },
+                    CrowdControl = { r = 1.00, g = 0.25, b = 0.25 },
+                },
+                debuffOffsetX = 0, -- horizontal offset for the debuff icon row
+                debuffOffsetY = 0, -- vertical offset for the debuff icon row
+                showDebuffPositionDebug = false, -- persistent debug box showing debuff row bounds
+                showRaidMarkers = true, -- show raid target markers (skull, cross, etc.)
+                raidMarkerDebuffLayout = false, -- force beside-bar raid marker on all plates (as when showDebuffs)
+                showEliteIcon = true, -- show elite/rare dragon icon on nameplates
+                eliteIconStyle = "dragon", -- "dragon" | "star" (star uses *-icon-old textures)
+                showComboPoints = false, -- show combo points on target nameplate
+                questIcons = { -- quest objective icons on nameplates (kill/loot); stock: target/mouseover/focus only, awesome_wotlk: all plates
+                    enabled = true,
+                    nameResolution = true, -- token-less: match plate name to active objectives (kill: addon-free, loot: quest-addon DB)
+                    lootProvider = "auto", -- loot DB source: auto|off|pfquest|questie|questhelper
+                    questieCoexist = "ask", -- who draws icons when Questie's own nameplate icons are on: ask|dragonui|questie
+                    pointerMode = false, -- always show quest_pointer; skips kill/loot type crossref
+                    killIcon = "sword", -- "sword" | "skull"
+                    lootIcon = "bag", -- "bag" | "chest"
+                    eliteKillIcon = true, -- distinct icon on elite/rare kill objectives
+                    testIcon = "off", -- force-preview one icon on all plates for tuning: off|sword|skull|elite|bag|chest|pointer
+                    -- Per-icon x/y (from health-bar center) and display size; code-tunable defaults.
+                    icons = {
+                        sword   = { x = -93, y = 6, size = 24 },
+                        skull   = { x = -90, y = 7, size = 22 },
+                        elite   = { x = -90, y = 6, size = 26 },
+                        bag     = { x = -90, y = 7, size = 26 },
+                        chest   = { x = -90, y = 7, size = 22 },
+                        pointer = { x = -78, y = 7, size = 28 },
+                    },
+                },
+                showTotemIcons = false, -- show totem icon on shaman totem nameplates
+                totemIconPosition = "top", -- "top" | "left" | "right"
+                totemIconOnly = false, -- hide the totem nameplate entirely; show only the totem icon
+                showTotemTimer = true, -- show remaining life on own totems (requires GetTotemInfo data)
+                totemNormalModeList = "", -- comma-separated exact totem names forced to render as a plain plate (no icon)
+                centerNameOnly = false, -- hide level/health % and center the unit name
+                showLevelInName = false, -- show the level in the nameplate
+                showLevelOnHover = false, -- level on hover+target; false = target only
+                showLevelAlways = true, -- always show level bracket on any resolvable plate
+                levelTextFormat = "plain", -- "brackets" | "parentheses" | "plain"
+                nameReactionColors = false, -- tint name text with health-bar reaction color
+                enemyNameClassColors = false, -- class colors for enemy player name text
+                friendlyNameClassColors = false, -- class colors for friendly player name text (needs bar class options)
+                friendlyPlayerColor = { r = 0, g = 0, b = 1 }, -- default friendly player color (vanilla blue)
+                friendlyNPCColor = { r = 0, g = 1, b = 0 }, -- default friendly NPC color (green)
+                partyClassColors = false, -- use class colors for party members instead of friendlyPlayerColor
+                friendlyClassColors = false, -- class-color ALL friendly players (not just group); hover/target on stock, instant with awesome_wotlk
+                friendlyNameOnly = false, -- MASTER: enable headline mode (hide health/power/cast bars, show only the name)
+                friendlyNameOnlyParty = true, -- headline mode for party/raid members (default on = preserves previous behavior)
+                friendlyNameOnlyAll = false, -- headline mode for ALL friendly players (superset of party/raid)
+                friendlyNameOnlyColor = { r = 1, g = 1, b = 1 }, -- headline name text color when class colors are not applied (default white)
+                friendlyNameOnlyClassColor = false, -- class-color friendly player names while in headline mode (non-group needs awesome_wotlk)
+                friendlyNameOnlyGuild = false, -- show <Guild> subtitle for friendly players in headline mode (resolves via target/mouseover, instant with awesome_wotlk)
+                friendlyNameOnlyTitle = false, -- show the player's title inline via UnitPVPName (e.g. "Arthas Jenkins")
+                friendlyNameOnlyAFK = false, -- show <AFK> for away friendly players in headline mode
+                friendlyNPCNameOnly = false, -- headline mode for friendly NPCs
+                friendlyNPCNameOnlyTitle = false, -- show <Title/Occupation> subtitle for friendly NPCs (awesome_wotlk only)
+                headlineExcludeTarget = false, -- keep health/power/cast bars on the current target while headline mode is active
+                enemyPlayerClassColors = false, -- use class colors for enemy player nameplates (ShowClassColorInNameplate)
+                disableNonTargetFade = false, -- when true, target/non-target use the same full opacity
+                opacityNonTarget = 0.5, -- default non-target opacity
+                opacityFullNoTarget = true, -- when no target exists, use full target opacity
+                opacityFullParty = false, -- always show party/raid member nameplates at full opacity
+                offsetX = 0, -- horizontal offset from the center of the screen
+                offsetY = 0, -- vertical offset from the center of the screen
+                clickboxWidthFactor = 1, -- width factor for the clickbox
+                clickboxHeightFactor = 1, -- height factor for the clickbox
+                showClickbox = false, -- show the clickbox overlay
+                totemClickPadding = 8, -- extra clickable padding (px) on totem nameplates
+                clampTarget = true, -- keep the target nameplate from leaving the screen top
+                clampBoss = true, -- keep boss nameplates clamped in party/raid instances
+                clampTopInset = 40, -- distance below the screen top where a clamped plate stops
+                depthSortingEnabled = true, -- depth/Z-order sorting for overlapping plates
+                retailTargetScale = 1, -- Retail behavior: target scale multiplier
+                retailFriendlyScale = 1, -- Retail behavior: friendly plate scale multiplier
+                retailStackingEnabled = false, -- Retail-like stacking behavior
+                retailStackingInInstance = false, -- If true, stacking only applies in instances
+                retailStackingXSpace = 150, -- horizontal spacing between nameplates
+                retailStackingYSpace = 24, -- vertical spacing between nameplates
+                retailStackingOriginY = 0, -- vertical origin for stacking
+                retailStackingFreezeMouseover = false, -- freeze the mouseover position while stacking
+                bghCompatEnabled = true, -- compatibility bridge for BattleGroundHealers icon anchoring
+                bghIconAnchor = "top", -- "left" | "top" | "right" | "bottom"
+                bghIconOffsetX = 0, -- x offset for BattleGroundHealers icon anchor
+                bghIconOffsetY = 0, -- y offset for BattleGroundHealers icon anchor
+                bghIconSize = 24, -- icon size override used by compatibility bridge
+                bghTestMode = false, -- enables manual mark-target testing for BattleGroundHealers compatibility
+                nameplateAlphaCompat = false, -- skip forcing native plate alpha to 1, for addons that read it as target identity (PlateBuffs, ...)
+                nameplateBarAlphaCompat = false, -- texture-only health-bar hide instead of bar-level SetAlpha, for addons parented to it (Icicle, ...)
             },
             tooltip = {
                 enabled = true, -- Enhanced tooltip styling with class colors
@@ -745,11 +1046,33 @@ local defaults = {
                 class_colored_name = true, -- Color unit name by class
                 target_of_target = true, -- Show target-of-target line
                 health_bar = true, -- Show health bar on tooltip
-                anchor_cursor = false -- Anchor tooltip to cursor
+                anchor_cursor = false, -- Anchor tooltip to cursor
+                show_aura_source = true, -- Show caster name (and spell ID) on buff/debuff tooltips
             },
             itemquality = {
                 enabled = true, -- Color item borders by quality in bags, character panel, bank, merchant
                 min_quality = 2 -- Minimum quality to show (2 = Uncommon/green)
+            },
+            itemlevel = {
+                enabled = true, -- Show item level on gear icons
+                font_size = 12,
+                font_family = "expressway", -- default|expressway|primary|narrow|skurri|morpheus
+                font_outline = "THICKOUTLINE", -- NONE|OUTLINE|THICKOUTLINE (no real bold in 3.3.5a)
+                position = "BOTTOM", -- BOTTOM|CENTER|TOP vertical placement on the icon
+                show_average = true, -- Average item level on the character/inspect panel
+                tooltip_cvar = false, -- Also set Blizzard's showItemLevel CVar (tooltip line)
+                -- Per-context toggles
+                bags = true,
+                bank = true,
+                guildbank = true,
+                character = true,
+                inspect = true,
+                merchant = true,
+                trade = true,
+                loot = true,
+                lootroll = true,
+                mail = true,
+                auction = true,
             },
             chatmods = {
                 enabled = true, -- Chat enhancements: hide buttons, editbox position, URL copy, chat copy
@@ -759,26 +1082,52 @@ local defaults = {
                 chatBgIdleAlpha = 0, -- Chat style background opacity when idle/mouse away (0 = hidden, 1 = always visible)
                 editboxIdleAlpha = 0, -- Editbox minimum opacity when idle (0 = fades with tabs, 1 = always visible)
                 editboxStyle = "dark", -- Editbox background style: "none", "dark", "dragon", "midnight"
+                vanillaEditbox = false, -- Use the stock chat input appearance instead of the DragonUI one
             },
-            combuctor = {
-                enabled = false -- All-in-one bag replacement with filtering and search
+            bagster = {
+                enabled = false, -- All-in-one bag replacement with filtering and search
+                money_display = "icons", -- Coin display: "icons" (g/s/c icons) or "text"
+                item_scale = 1, -- Target item slot scale (1 = native 37px slot); cell flexes to fill the width
+                item_spacing = 2, -- Gap between slots (pitch = 37 + spacing)
+                bag_break = 1, -- 0 off, 1 normal↔profession (+keyring block), 2 every bag
+                break_space = 1.3, -- Extra rows between bag-break groups
+                glow_quality = true, -- Colored ring on uncommon and better items
+                glow_quest = true, -- Golden border on quest items
+                glow_alpha = 1, -- Quality ring opacity
+                show_quality_filter = true, -- Rarity filter dots centered on the bottom band
+            },
+            bags_skin = {
+                enabled = true -- Experimental retail-style bag window skin
             },
             bagsort = {
                 enabled = true, -- Sort bags and bank items with buttons
+                bank_fill_from_bags = true, -- Sort bank: top off partial bank stacks from bags first
                 lockedSlots = {}, -- Slots excluded from sorting (key format: "bag:slot")
                 move_interval = 0.1, -- Delay between item move attempts while sorting
-                lock_hotkey = "ALT_LEFT" -- Modifier + mouse button used to lock or unlock a slot
+                lock_hotkey = "ALT_LEFT", -- Modifier + mouse button used to lock or unlock a slot
+                lock_color = { 0.15, 0.80, 1.00, 0.95 }, -- Tint applied to the locked-slot padlock icon
+                reverse_stack = false, -- Stack items from the end so new loot appears at the top
+            },
+            altmoney = {
+                enabled = true, -- Other characters' gold on the bag money tooltip
+                show_all_realms = true, -- Include characters from other realms in the list
             },
             unitframe_layers = {
                 enabled = false, -- Heal prediction, absorb shields, animated health loss overlays on unit frames
                 animated_loss = true, -- Animated red health loss bar on player frame
                 builder_spender = false, -- Mana gain/loss glow feedback (experimental)
                 missing_health = false -- Show missing health deficit text on health bars
+            },
+            versioncheck = {
+                enabled = true, -- Cross-player version broadcast and update detection
             }
         },
 
         -- LAYOUT PRESETS (user-saved UI snapshots within this profile)
-        presets = {}
+        presets = {},
+
+        -- POSITION PRESETS (edit-mode element positions only)
+        positionPresets = {}
     }
 };
 
@@ -788,7 +1137,7 @@ addon.db = {
     global = addon.defaults and addon.defaults.global or {}
 };
 
--- Recursive table copy (preserves existing keys in target)
+-- Duplicates addon.DeepCopy on purpose: database.lua loads before core/api.lua defines it.
 local function deepCopy(source, target)
     for key, value in pairs(source) do
         if type(value) == "table" then
@@ -833,4 +1182,3 @@ function addon:SetConfigValue(section, key, subkey, value)
         self.db.profile[section] = value;
     end
 end
-

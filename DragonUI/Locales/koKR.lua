@@ -1,4 +1,4 @@
-﻿--[[
+--[[
 ================================================================================
 DragonUI - English Locale (Default)
 ================================================================================
@@ -33,8 +33,6 @@ L["Vehicle debug not available"] = "íƒˆê²ƒ ë””ë²„ê·¸ë¥¼ ì�
 L["KeyBinding module not available"] = "ë‹¨ì¶•í‚¤ ì„¤ì • ëª¨ë“ˆì„ ì‚¬ìš©í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤."
 L["Unable to open configuration"] = "ì„¤ì •ì°½ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤."
 L["Commands: /dragonui config, /dragonui edit"] = "ëª…ë ¹ì–´: /dragonui config, /dragonui edit"
-L["Reset position: %s"] = "ìœ„ì¹˜ ì´ˆê¸°í™”: %s"
-L["All positions reset to defaults"] = "ëª¨ë“  ìœ„ì¹˜ê°€ ê¸°ë³¸ê°’ìœ¼ë¡œ ì´ˆê¸°í™”ë˜ì—ˆìŠµë‹ˆë‹¤"
 L["Editor mode enabled - Drag frames to reposition"] = "íŽ¸ì§‘ ëª¨ë“œ í™œì„±í™” - í”„ë ˆìž„ì„ ë“œëž˜ê·¸í•˜ì—¬ ìœ„ì¹˜ ë³€ê²½"
 L["Editor mode disabled - Positions saved"] = "íŽ¸ì§‘ ëª¨ë“œ ë¹„í™œì„±í™” - ìœ„ì¹˜ê°€ ì €ìž¥ë˜ì—ˆìŠµë‹ˆë‹¤"
 L["Minimap module restored to Blizzard defaults"] = "ë¯¸ë‹ˆë§µ ëª¨ë“ˆì´ ë¸”ë¦¬ìžë“œ ê¸°ë³¸ê°’ìœ¼ë¡œ ë³µì›ë˜ì—ˆìŠµë‹ˆë‹¤"
@@ -48,7 +46,6 @@ L["Remaining: "] = "ë‚¨ìŒ: "
 L["Rested: "] = "íœ´ì‹: "
 
 -- Errors
-L["Error executing pending operation:"] = "ëŒ€ê¸° ì¤‘ì¸ ìž‘ì—… ì‹¤í–‰ ì˜¤ë¥˜:"
 L["Error -- Addon 'DragonUI_Options' not found or is disabled."] = "ì˜¤ë¥˜ -- 'DragonUI_Options' ì• ë“œì˜¨ì„ ì°¾ì„ ìˆ˜ ì—†ê±°ë‚˜ ë¹„í™œì„±í™”ë˜ì–´ ìžˆìŠµë‹ˆë‹¤."
 
 -- ============================================================================
@@ -61,7 +58,6 @@ L["/dragonui or /dui - Open configuration"] = "/dragonui ë˜ëŠ” /dui - ì
 L["/dragonui config - Open configuration"] = "/dragonui config - ì„¤ì •ì°½ ì—´ê¸°"
 L["/dragonui edit - Toggle editor mode (move UI elements)"] = "/dragonui edit - íŽ¸ì§‘ ëª¨ë“œ ì „í™˜ (UI ìš”ì†Œ ì´ë™)"
 L["/dragonui reset - Reset all positions to defaults"] = "/dragonui reset - ëª¨ë“  ìœ„ì¹˜ë¥¼ ê¸°ë³¸ê°’ìœ¼ë¡œ ì´ˆê¸°í™”"
-L["/dragonui reset <name> - Reset specific mover"] = "/dragonui reset <ì´ë¦„> - íŠ¹ì • ìš”ì†Œì˜ ìœ„ì¹˜ ì´ˆê¸°í™”"
 L["/dragonui status - Show module status"] = "/dragonui status - ëª¨ë“ˆ ìƒíƒœ í‘œì‹œ"
 L["/dragonui kb - Toggle keybind mode"] = "/dragonui kb - ë‹¨ì¶•í‚¤ ì„¤ì • ëª¨ë“œ ì „í™˜"
 L["/dragonui version - Show version info"] = "/dragonui version - ë²„ì „ ì •ë³´ í‘œì‹œ"
@@ -80,10 +76,8 @@ L["Target Frame"] = true
 L["Focus Frame"] = true
 L["Party Frames"] = true
 L["Cooldowns"] = true
-L["Registered Movers: "] = "ë“±ë¡ëœ ì´ë™ ì§€ì : "
 L["Editable Frames: "] = "íŽ¸ì§‘ ê°€ëŠ¥í•œ í”„ë ˆìž„: "
 L["DragonUI Version: "] = "DragonUI ë²„ì „: "
-L["Use /dragonui edit to enter edit mode, then right-click frames to reset."] = "/dragonui editë¥¼ ìž…ë ¥í•˜ì—¬ íŽ¸ì§‘ ëª¨ë“œë¡œ ë“¤ì–´ê°„ ë’¤, í”„ë ˆìž„ì„ ìš°í´ë¦­í•˜ë©´ ìœ„ì¹˜ê°€ ì´ˆê¸°í™”ë©ë‹ˆë‹¤."
 
 -- ============================================================================
 -- EDITOR MODE
@@ -97,6 +91,36 @@ L["No"] = "ì•„ë‹ˆìš”"
 L["UI elements have been repositioned. Reload UI to ensure all graphics display correctly?"] = "UI ìš”ì†Œì˜ ìœ„ì¹˜ê°€ ë³€ê²½ë˜ì—ˆìŠµë‹ˆë‹¤. ëª¨ë“  ê·¸ëž˜í”½ì´ ì˜¬ë°”ë¥´ê²Œ í‘œì‹œë˜ë„ë¡ UIë¥¼ ìž¬ì„¤ì •í•˜ì‹œê² ìŠµë‹ˆê¹Œ?"
 L["Reload Now"] = "ì§€ê¸ˆ ìž¬ì„¤ì •"
 L["Later"] = "ë‚˜ì¤‘ì—"
+
+-- Position presets (edit mode)
+L["Position Presets"] = "위치 프리셋"
+L["Position Preset"] = "위치 프리셋"
+L["Save"] = "저장"
+L["Import"] = "가져오기"
+L["Cancel"] = "취소"
+L["Load"] = "불러오기"
+L["Delete"] = "삭제"
+L["Select All"] = "전체 선택"
+L["Click to load"] = "클릭하여 불러오기"
+L["No position presets saved yet."] = "저장된 위치 프리셋이 없습니다."
+L["Load position preset '%s'? This will overwrite your current element positions."] = "'%s' 위치 프리셋을 불러올까요? 현재 요소 위치가 덮어씌워집니다."
+L["Delete position preset '%s'? This cannot be undone."] = "'%s' 위치 프리셋을 삭제할까요? 이 작업은 취소할 수 없습니다."
+L["Enter a name for the imported position preset:"] = "가져온 위치 프리셋의 이름을 입력하세요:"
+L["Imported Position Preset"] = "가져온 위치 프리셋"
+L["Position preset saved: "] = "위치 프리셋 저장됨: "
+L["Position preset loaded: "] = "위치 프리셋 불러옴: "
+L["Position preset deleted: "] = "위치 프리셋 삭제됨: "
+L["Position preset imported: "] = "위치 프리셋 가져옴: "
+L["Export Position Preset"] = "위치 프리셋 내보내기"
+L["Import Position Preset"] = "위치 프리셋 가져오기"
+L["Invalid position preset string."] = "유효하지 않은 위치 프리셋 문자열입니다."
+L["Not a valid DragonUI position preset string."] = "유효한 DragonUI 위치 프리셋 문자열이 아닙니다."
+L["Failed to export position preset."] = "위치 프리셋 내보내기에 실패했습니다."
+L["Save New Preset"] = "새 프리셋 저장"
+L["Load Preset"] = "프리셋 불러오기"
+L["Delete Preset"] = "프리셋 삭제"
+L["Export Preset"] = "프리셋 내보내기"
+L["Import Preset"] = "프리셋 가져오기"
 
 -- ============================================================================
 -- KEYBINDING MODULE
@@ -155,6 +179,7 @@ L["MicroMenu"] = "ë§ˆì´í¬ë¡œ ë©”ë‰´"
 L["VehicleExitOverlay"] = "íƒˆê²ƒ ë‚´ë¦¬ê¸°"
 L["StanceOverlay"] = "íƒœì„¸ë°”"
 L["petbar"] = "ì†Œí™˜ìˆ˜ë°”"
+L["ExtraBar1"] = "추가 바"
 L["boss"] = "ë³´ìŠ¤ í”„ë ˆìž„"
 L["Boss Frames"] = "ë³´ìŠ¤ í”„ë ˆìž„"
 L["Boss1Frame"] = "ë³´ìŠ¤ í”„ë ˆìž„"
@@ -164,7 +189,8 @@ L["Boss4Frame"] = "ë³´ìŠ¤ í”„ë ˆìž„"
 L["TotemBarOverlay"] = "í† í…œ ë°”"
 L["PlayerCastbar"] = "ì‹œì „ë°”"
 L["TooltipWidget"] = "íˆ´íŒ"
-L["Auras"] = "ì˜¤ë¼ (ë²„í”„/ë””ë²„í”„)"
+L["Buff"] = "버프"
+L["Debuffs"] = "디버프"
 L["WeaponEnchants"] = "ë¬´ê¸° ê°•í™” íš¨ê³¼"
 L["Loot Roll"] = "ì£¼ì‚¬ìœ„ êµ´ë¦¼"
 L["Quest Tracker"] = "í€˜ìŠ¤íŠ¸ ì¶”ì ê¸°"
@@ -172,6 +198,7 @@ L["Quest Tracker"] = "í€˜ìŠ¤íŠ¸ ì¶”ì ê¸°"
 -- Mover tooltip strings
 L["Drag to move"] = "ë“œëž˜ê·¸ ì´ë™"
 L["Animated minimap border effects for DragonUI."] = "DragonUIìš© ì• ë‹ˆë©”ì´ì…˜ ë¯¸ë‹ˆë§µ í…Œë‘ë¦¬ íš¨ê³¼."
+L["Click to reset"] = "클릭으로 초기화"
 L["Right-click to reset"] = "ìš°í´ë¦­ìœ¼ë¡œ ì´ˆê¸°í™”"
 L["Status Tooltip:"] = "ìƒíƒœ íˆ´íŒ:"
 L["Top"] = "ìœ„"
@@ -213,15 +240,18 @@ L["Use DragonUI"] = "DragonUI ì‚¬ìš©"
 L["Disable Both"] = "ë‘˜ ë‹¤ ë¹„í™œì„±í™”"
 L["Use DragonUI Unit Frame Layers"] = "DragonUI Unit Frame Layers ì‚¬ìš©"
 L["Disable both Unit Frame Layers"] = "ë‘ Unit Frame Layers ëª¨ë‘ ë¹„í™œì„±í™”"
-L["DragonUI - Party Frame Issue"] = true
-L["You joined a party while in combat. Due to CompactRaidFrame taint issues, party frames may not display correctly."] = true
-L["Reload the UI to fix party frame display?"] = true
 
 -- Conflict reasons
 L["Conflicts with DragonUI's custom unit frame textures and power bar system."] = "DragonUIì˜ ì‚¬ìš©ìž ì§€ì • ìœ ë‹› í”„ë ˆìž„ í…ìŠ¤ì²˜ ë° ìžì› ë°” ì‹œìŠ¤í…œê³¼ ì¶©ëŒí•©ë‹ˆë‹¤."
-L["Known taint issues when manipulating party frames during combat. DragonUI provides automatic fixes."] = "ì „íˆ¬ ì¤‘ íŒŒí‹° í”„ë ˆìž„ ì¡°ìž‘ ì‹œ ì•Œë ¤ì§„ ì˜¤ì—¼ ë¬¸ì œê°€ ìžˆìŠµë‹ˆë‹¤. DragonUIê°€ ìžë™ ìˆ˜ì • ê¸°ëŠ¥ì„ ì œê³µí•©ë‹ˆë‹¤."
 L["Resets minimap mask and blip textures. DragonUI re-applies its custom textures automatically."] = "ë¯¸ë‹ˆë§µ ë§ˆìŠ¤í¬ì™€ ë¸”ë¦½ í…ìŠ¤ì²˜ë¥¼ ì´ˆê¸°í™”í•©ë‹ˆë‹¤. DragonUIê°€ ì‚¬ìš©ìž ì§€ì • í…ìŠ¤ì²˜ë¥¼ ìžë™ìœ¼ë¡œ ë‹¤ì‹œ ì ìš©í•©ë‹ˆë‹¤."
 L["SexyMap modifies the minimap borders, shape, and zone text which conflicts with DragonUI's minimap module."] = "SexyMapì´ ë¯¸ë‹ˆë§µ í…Œë‘ë¦¬, ëª¨ì–‘, ì§€ì—­ ì´ë¦„ í…ìŠ¤íŠ¸ë¥¼ ë³€ê²½í•˜ì—¬ DragonUIì˜ ë¯¸ë‹ˆë§µ ëª¨ë“ˆê³¼ ì¶©ëŒí•©ë‹ˆë‹¤."
+L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."] = "네임플레이트의 기본 알파값으로 대상 플레이트를 식별합니다. DragonUI의 기본 밝기 유지(디밍 방지) 기능과 충돌합니다."
+L["Parents its cooldown icons to the native health bar; conflicts with DragonUI's default health-bar hiding."] = "재사용 대기시간 아이콘을 기본 생명력 바에 연결합니다. DragonUI의 기본 생명력 바 숨김과 충돌합니다."
+
+-- Nameplate addon compatibility popup
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Addon Compatibility so it works correctly?"] = "|cFFFFFF00%s|r 감지됨. 올바르게 작동하도록 네임플레이트 addon 호환성을 활성화하시겠습니까?"
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Health Bar Compatibility so it works correctly?"] = "|cFFFFFF00%s|r 감지됨. 올바르게 작동하도록 네임플레이트 생명력 바 호환성을 활성화하시겠습니까?"
+L["Enable"] = "활성화"
 
 -- SexyMap compatibility popup
 L["DragonUI - SexyMap Detected"] = "DragonUI - SexyMap ê°ì§€ë¨"
@@ -283,8 +313,21 @@ L["Click the lock-clear button to remove all locked slots."] = "ìž ê¸ˆ í�
 L["Hover an item or slot, then type /sortlock."] = "ì•„ì´í…œ ë˜ëŠ” ìŠ¬ë¡¯ì— ë§ˆìš°ìŠ¤ë¥¼ ì˜¬ë¦° ë’¤ /sortlock ì„ ìž…ë ¥í•˜ì„¸ìš”."
 L["Slot locked (bag %d, slot %d)."] = "ìŠ¬ë¡¯ ìž ê¸ˆë¨ (ê°€ë°© %d, ìŠ¬ë¡¯ %d)."
 L["Slot unlocked (bag %d, slot %d)."] = "ìŠ¬ë¡¯ ìž ê¸ˆ í•´ì œë¨ (ê°€ë°© %d, ìŠ¬ë¡¯ %d)."
+L["You must be at the guild bank."] = "길드 은행에 있어야 합니다."
+L["Could not determine the current guild bank tab."] = "현재 길드 은행 탭을 확인할 수 없습니다."
+L["You need full deposit and withdraw access to this tab to sort it."] = "이 탭을 정렬하려면 예치 및 인출 권한이 모두 필요합니다."
+L["This guild bank tab is already sorted!"] = "이 길드 은행 탭은 이미 정렬되어 있습니다!"
+L["Sort this guild bank tab? Depending on your server, this may be logged and count against your guild's shared withdrawal allowance, the same as moving items by hand."] = "이 길드 은행 탭을 정렬하시겠습니까? 서버에 따라 직접 아이템을 옮기는 것과 마찬가지로 기록되거나 길드의 공유 인출 한도에 포함될 수 있습니다."
+L["Sort"] = "정렬"
+L["Click to sort items in the currently open guild bank tab."] = "현재 열려 있는 길드 은행 탭의 아이템을 정렬하려면 클릭하세요."
+L["Never moves items between tabs."] = "탭 간에는 절대 아이템을 이동하지 않습니다."
+L["Sort Guild Bank Tab"] = "길드 은행 탭 정렬"
 L["Could not clear locks (config not ready)."] = "ìž ê¸ˆì„ í•´ì œí•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤ (ì„¤ì •ì´ ì•„ì§ ì¤€ë¹„ë˜ì§€ ì•ŠìŒ)."
-L["Cleared all sort-locked slots."] = "ì •ë ¬ ìž ê¸ˆ ìŠ¬ë¡¯ì„ ëª¨ë‘ í•´ì œí–ˆìŠµë‹ˆë‹¤."
+L["Cleared all sort-locked slots."] = "ì •ë ¬ ìž ê¸ˆ ìŠ¬ë¡¯ì „ ëª¨ë' ì§€í•´ì œí–ˆìŠµë‹ˆë‹¤."
+
+-- Sell Scrap
+L["Sell Scrap"] = "ê³*ì²* íŒë§¤"
+L["Open a merchant window first to sell scrap items."] = "ê³*ì²*ì „ íŒë§¤í•˜ë ¤ë©´ ë¨¼ì €€ ìƒì ¸ ì°½ì „ ì—¬ì„¸ìš”."
 
 -- Micromenu Latency
 L["Network"] = "ë„¤íŠ¸ì›Œí¬"
@@ -305,7 +348,6 @@ L["disabled"] = true
 L["Enabled"] = "í™œì„±í™”ë¨"
 L["Disabled"] = "ë¹„í™œì„±í™”ë¨"
 L["Legacy refresh failed for"] = true
-L["RegisterMover: name and parent are required"] = true
 L["Bonus Action Button %d"] = true
 L["Stance Button %d"] = true
 L["Pet Action Button %d"] = true
@@ -387,6 +429,11 @@ L["Dark Mode"] = "ë‹¤í¬ ëª¨ë“œ"
 L["Darken UI borders and chrome"] = "UI í…Œë‘ë¦¬ì™€ ìž¥ì‹ì„ ì–´ë‘¡ê²Œ í‘œì‹œ"
 L["Item Quality"] = "ì•„ì´í…œ í’ˆì§ˆ"
 L["Color item borders by quality in bags, character panel, bank, and merchant"] = "ê°€ë°©, ìºë¦­í„° ì°½, ì€í–‰, ìƒì¸ ì°½ì˜ ì•„ì´í…œ í…Œë‘ë¦¬ë¥¼ í’ˆì§ˆë³„ë¡œ í‘œì‹œ"
+-- Item Level
+L["Item Level"] = "아이템 레벨"
+L["Show item level on gear icons in bags, character panel, bank, and more"] = "가방, 캐릭터 창, 은행 등에서 장비 아이콘에 아이템 레벨을 표시합니다"
+L["Item Level: %d"] = "아이템 레벨: %d"
+
 L["Key Binding"] = "í‚¤ ë°”ì¸ë”©"
 L["LibKeyBound integration for intuitive keybinding"] = "ì§ê´€ì ì¸ í‚¤ ì„¤ì •ì„ ìœ„í•œ LibKeyBound í†µí•©"
 L["Buff Frame"] = "ë²„í”„ í”„ë ˆìž„"
@@ -395,12 +442,17 @@ L["Chat Mods"] = "ì±„íŒ… ê¸°ëŠ¥"
 L["Chat enhancements: hide buttons, editbox position, URL copy, chat copy, link hover, tell target"] = "ì±„íŒ… ê°œì„ : ë²„íŠ¼ ìˆ¨ê¹€, ìž…ë ¥ì°½ ìœ„ì¹˜, URL ë³µì‚¬, ì±„íŒ… ë³µì‚¬, ë§í¬ ë¯¸ë¦¬ë³´ê¸°, ëŒ€ìƒì—ê²Œ ê·“ì†ë§"
 L["Bag Sort"] = "ê°€ë°© ì •ë ¬"
 L["Sort bags and bank items with buttons"] = "ë²„íŠ¼ìœ¼ë¡œ ê°€ë°©ê³¼ ì€í–‰ ì•„ì´í…œ ì •ë ¬"
-L["Combuctor"] = "Combuctor"
+L["Bag Skin"] = "가방 스킨"
+L["Retail-style skin for Blizzard bag windows"] = "블리자드 가방 창에 정식 서버 스타일 스킨 적용"
+L["Bagster"] = "Bagster"
 L["All-in-one bag replacement with filtering and search"] = "í•„í„°ì™€ ê²€ìƒ‰ ê¸°ëŠ¥ì´ ìžˆëŠ” ì˜¬ì¸ì› ê°€ë°© ëŒ€ì²´"
 L["Stance Bar"] = "íƒœì„¸ ë°”"
 L["Vehicle"] = "íƒˆê²ƒ"
 L["Vehicle interface enhancements"] = "íƒˆê²ƒ ì¸í„°íŽ˜ì´ìŠ¤ ê°œì„ "
 L["Pet Bar"] = "ì†Œí™˜ìˆ˜ ë°”"
+L["Extra Bar"] = "추가 바"
+L["A standalone action bar, independent of any class bonus bar"] = "클래스 보너스 바와 무관한 독립적인 액션 바"
+L["Drag a spell, item or macro here."] = "여기에 주문, 아이템 또는 매크로를 끌어다 놓으세요."
 L["Micro Menu"] = "ë§ˆì´í¬ë¡œ ë©”ë‰´"
 L["Main Bars"] = "ì£¼ ì•¡ì…˜ë°”"
 L["Main action bars, status bars, scaling and positioning"] = "ì£¼ ì•¡ì…˜ë°”, ìƒíƒœ ë°”, í¬ê¸° ë° ìœ„ì¹˜ ì¡°ì •"
@@ -411,18 +463,44 @@ L["Custom minimap styling, positioning, tracking icons and calendar"] = "ì‚¬
 L["Quest tracker positioning and styling"] = "í€˜ìŠ¤íŠ¸ ì¶”ì ê¸° ìœ„ì¹˜ ë° ìŠ¤íƒ€ì¼ ì„¤ì •"
 L["Tooltip"] = "íˆ´íŒ"
 L["Enhanced tooltip styling with class colors and health bars"] = "ì§ì—… ìƒ‰ìƒê³¼ ìƒëª…ë ¥ ë°”ê°€ ì ìš©ëœ í–¥ìƒëœ íˆ´íŒ ìŠ¤íƒ€ì¼"
+L["Nameplates"] = "이름표"
+L["Apply DragonUI nameplate styling."] = "DragonUI 스타일을 이름표에 적용합니다."
 L["Unit Frame Layers"] = "ìœ ë‹› í”„ë ˆìž„ ë ˆì´ì–´"
 L["Heal prediction, absorb shields, and animated health loss on unit frames"] = "ìœ ë‹› í”„ë ˆìž„ì˜ ì¹˜ìœ  ì˜ˆì¸¡, í¡ìˆ˜ ë³´í˜¸ë§‰ ë° ì• ë‹ˆë©”ì´ì…˜ ì²´ë ¥ ì†ì‹¤"
 L["Stance/shapeshift bar positioning and styling"] = "íƒœì„¸/ë³€ì‹  ë°” ìœ„ì¹˜ ë° ìŠ¤íƒ€ì¼ ì„¤ì •"
 L["Pet action bar positioning and styling"] = "ì†Œí™˜ìˆ˜ ì•¡ì…˜ ë°” ìœ„ì¹˜ ë° ìŠ¤íƒ€ì¼ ì„¤ì •"
 L["Micro menu and bags system styling and positioning"] = "ë§ˆì´í¬ë¡œ ë©”ë‰´ ë° ê°€ë°© ì‹œìŠ¤í…œ ìŠ¤íƒ€ì¼/ìœ„ì¹˜ ì„¤ì •"
+L["|cff00ff00Left-Click|r to show this bag's items"] = "|cff00ff00왼쪽 클릭|r으로 이 가방의 아이템 표시"
+L["|cff00ff00Left-Click|r to hide this bag's items"] = "|cff00ff00왼쪽 클릭|r으로 이 가방의 아이템 숨기기"
+L["|cff00ff00Drag|r to move this bag"] = "|cff00ff00드래그|r하여 이 가방 이동"
 L["Sort complete."] = "ì •ë ¬ì´ ì™„ë£Œë˜ì—ˆìŠµë‹ˆë‹¤."
 L["Sort already in progress."] = "ì •ë ¬ì´ ì´ë¯¸ ì§„í–‰ ì¤‘ìž…ë‹ˆë‹¤."
 L["Bags already sorted!"] = "ê°€ë°©ì´ ì´ë¯¸ ì •ë ¬ë˜ì–´ ìžˆìŠµë‹ˆë‹¤!"
 L["You must be at the bank."] = "ì€í–‰ì— ìžˆì–´ì•¼ í•©ë‹ˆë‹¤."
 L["Bank already sorted!"] = "ì€í–‰ì´ ì´ë¯¸ ì •ë ¬ë˜ì–´ ìžˆìŠµë‹ˆë‹¤!"
 L["Reputation: "] = "í‰íŒ: "
-L["Error in SafeCall:"] = "SafeCall ì˜¤ë¥˜:"
 
 L["Double-Click to Copy"] = "|cff33ff11ë”ë¸” í´ë¦­|rí•˜ì—¬ ë³µì‚¬"
 L["Copy Text"] = "í…ìŠ¤íŠ¸ ë³µì‚¬"
+
+-- Version Check Module
+L["Version Check"] = "버전 확인"
+L["Broadcast and detect addon version updates across group members"] = "그룹원 간 애드온 버전 업데이트를 감지하고 방송합니다"
+
+-- Quest nameplate icons wizard (Questie coexistence)
+L["Quest Icons on Nameplates"] = "이름표의 퀘스트 아이콘"
+L["Which quest icons do you want on your nameplates?"] = "이름표에 어떤 퀘스트 아이콘을 표시할까요?"
+L["Kill"] = "처치"
+L["Loot"] = "전리품"
+L['Pointer mode (just "!")'] = '포인터 모드 ("!"만)'
+L["Use Questie"] = "Questie 사용"
+L["Applying quest icon settings needs a UI reload."] = "퀘스트 아이콘 설정을 적용하려면 UI를 다시 불러와야 합니다."
+L["Reload"] = "다시 불러오기"
+
+-- Alt Gold
+L["Alt Gold"] = "다른 캐릭터 골드"
+L["Show the gold of your other characters when hovering the money in your bags"] = "가방의 소지금에 마우스를 올리면 다른 캐릭터의 골드를 표시합니다"
+L["Character Gold"] = "캐릭터 골드"
+L["No other characters recorded yet"] = "아직 기록된 다른 캐릭터가 없습니다"
+L["(current)"] = "(현재)"
+L["Total"] = "합계"

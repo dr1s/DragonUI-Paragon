@@ -39,7 +39,7 @@ local ANIM_DURATION   = 0.14
 local ANIM_SHRINK     = 0.35
 local HIGHLIGHT_TEX   = "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight"
 local WHITE_TEX       = "Interface\\Buttons\\WHITE8X8"
-local BORDER_TEX      = "Interface\\AddOns\\DragonUI\\assets\\border_buttons.tga"
+local BORDER_TEX      = "Interface\\AddOns\\DragonUI\\Textures\\Minimap\\border_buttons.tga"
 local GOLD_R, GOLD_G, GOLD_B = 1.0, 0.82, 0.20
 
 local INCLUDE_BUTTONS = {
@@ -63,6 +63,7 @@ local EXCLUDED_BUTTONS = {
 -- State
 -- ----------------------------------------------------------------------------
 local deps = Collector._deps or {}
+local isRefreshingCollector = false  -- guards against reentrant RefreshCollector calls
 
 -- ----------------------------------------------------------------------------
 -- Config helpers
@@ -150,7 +151,7 @@ end
 
 local function SetClassicIcon(tex)
     if not tex then return end
-    SafeSet(tex, deps.DRAGONUI_CLASSIC_COLLECTOR_ICON, deps.DRAGONUI_SETTINGS_BUTTON_ICON_FALLBACK)
+    SafeSet(tex, deps.DRAGONUI_CLASSIC_COLLECTOR_ICON)
     tex:SetTexCoord(0, 1, 0, 1)
 end
 
@@ -163,15 +164,38 @@ local function SetSettingsIcon(tex)
             return
         end
     end
-    SafeSet(tex, deps.DRAGONUI_SETTINGS_BUTTON_ICON, deps.DRAGONUI_SETTINGS_BUTTON_ICON_FALLBACK)
-    tex:SetTexCoord(0.16, 0.84, 0.16, 0.84)
+    SafeSet(tex, deps.DRAGONUI_SETTINGS_BUTTON_ICON)
+    tex:SetTexCoord(0, 1, 0, 1)
+end
+
+local function LayoutSettingsIcon(btn, pressed)
+    local icon = btn and btn.icon
+    if not icon or GetStyle() ~= STYLE_DUI then return end
+    local btnSize = btn:GetWidth() or deps.DRAGONUI_SETTINGS_BUTTON_SIZE or 21
+    -- File portrait: TexCoord breaks SetPortraitToTexture. Grow under oversized ring (Bagster guild).
+    local ringSize = btnSize + 4
+    local rest = btnSize
+    local size = pressed and (ringSize - 2) or rest
+    icon:ClearAllPoints()
+    icon:SetSize(size, size)
+    icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    icon:SetTexCoord(0, 1, 0, 1)
+    if btn.ringFrame then
+        btn.ringFrame:ClearAllPoints()
+        btn.ringFrame:SetSize(ringSize, ringSize)
+        btn.ringFrame:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    end
+    if btn.circle then
+        btn.circle:ClearAllPoints()
+        btn.circle:SetAllPoints(btn.ringFrame or btn)
+    end
 end
 
 local function SetClassicGlow(tex)
     if not tex then return end
     local a = deps.addon
     if a and a.SafeSetTexture then
-        a:SafeSetTexture(tex, deps.DRAGONUI_CLASSIC_COLLECTOR_ICON, deps.DRAGONUI_SETTINGS_BUTTON_ICON_FALLBACK)
+        a:SafeSetTexture(tex, deps.DRAGONUI_CLASSIC_COLLECTOR_ICON)
     else
         tex:SetTexture(deps.DRAGONUI_CLASSIC_COLLECTOR_ICON or WHITE_TEX)
     end
@@ -196,6 +220,8 @@ end
 -- Highlight / glow / animations
 -- ----------------------------------------------------------------------------
 local UpdateHighlightStyle  -- forward declaration
+local RefreshCollector  -- forward declaration
+local HookButtonVisibility  -- forward declaration
 
 local function EnsureHighlight(btn)
     if btn.DragonUI_HighlightPrepared then return end
@@ -210,18 +236,17 @@ local function EnsureHighlight(btn)
         h:SetVertexColor(GOLD_R, GOLD_G, GOLD_B, 1)
     end
 
-    local function makeLayer(inset, alpha)
-        local t = btn:CreateTexture(nil, "OVERLAY")
+    local parent = btn.ringFrame or btn
+    local function makeLayer(alpha)
+        local t = parent:CreateTexture(nil, "OVERLAY")
         t:SetTexture(HIGHLIGHT_TEX)
         t:SetBlendMode("ADD")
-        t:SetPoint("TOPLEFT", btn, "TOPLEFT", inset, -inset)
-        t:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -inset, inset)
         t:SetVertexColor(GOLD_R, GOLD_G, GOLD_B, alpha)
         t:Hide()
         return t
     end
-    btn.DragonUI_CircleHighlightLayer1 = makeLayer(1, 1.0)
-    btn.DragonUI_CircleHighlightLayer2 = makeLayer(2, 0.8)
+    btn.DragonUI_CircleHighlightLayer1 = makeLayer(1.0)
+    btn.DragonUI_CircleHighlightLayer2 = makeLayer(0.8)
 end
 
 local function EnsureClassicGlow(btn)
@@ -237,11 +262,11 @@ end
 local function EnsureCircleClickAnimation(btn)
     if btn.DragonUI_ClickFlash then return end
 
-    local flash = btn:CreateTexture(nil, "OVERLAY")
+    local parent = btn.ringFrame or btn
+    local flash = parent:CreateTexture(nil, "OVERLAY", nil, 7)
     flash:SetTexture(BORDER_TEX)
     flash:SetBlendMode("ADD")
-    flash:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
-    flash:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+    flash:SetAllPoints(parent)
     flash:SetVertexColor(GOLD_R, GOLD_G, GOLD_B, 1)
     flash:SetAlpha(0)
     flash:Hide()
@@ -338,8 +363,19 @@ UpdateHighlightStyle = function(btn)
         end
     else
         if glow then glow:Hide() end
-        if l1 then if active then l1:Show() else l1:Hide() end end
-        if l2 then if active then l2:Show() else l2:Hide() end end
+        -- Match oversized ring (btn+4), not the smaller button box.
+        local anchor = btn.ringFrame or btn
+        if l1 then
+            l1:ClearAllPoints()
+            l1:SetAllPoints(anchor)
+            if active then l1:Show() else l1:Hide() end
+        end
+        if l2 then
+            l2:ClearAllPoints()
+            l2:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
+            l2:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
+            if active then l2:Show() else l2:Hide() end
+        end
     end
 end
 
@@ -350,7 +386,8 @@ local function GetOrbitRadius(btn)
     local mapR = mathmax(Minimap:GetWidth(), Minimap:GetHeight()) * 0.5
     local size = (btn and btn:GetWidth()) or deps.DRAGONUI_SETTINGS_BUTTON_SIZE or 24
     local scale = (btn and btn.GetScale and btn:GetScale()) or 1
-    return mathmax(12, mapR - (size * scale) * 0.5 - 6)
+    -- Sit on the minimap rim and hang outside (+8); ring is already btn+4.
+    return mathmax(12, mapR - (size * scale) * 0.5 + 6)
 end
 
 local function GetMinimapScale()
@@ -389,11 +426,42 @@ local function GetCursorAngle()
     return NormalizeAngle(mathdeg(rad))
 end
 
-local function OpenInterfaceConfig()
+local function ToggleInterfaceConfig()
     local a = deps.addon
     if not a then return end
-    if a.OptionsPanel and a.OptionsPanel.Open then a.OptionsPanel:Open("general"); return end
+    if a.OptionsPanel and a.OptionsPanel.Toggle then
+        a.OptionsPanel:Toggle("general")
+        return
+    end
     if a.ToggleOptionsUI then a:ToggleOptionsUI("general") end
+end
+
+-- ----------------------------------------------------------------------------
+-- Detect addon launcher buttons hidden via their own settings
+-- ----------------------------------------------------------------------------
+local function IsAddonMinimapButtonHidden(btn)
+    if not btn then return false end
+    if btn.db and btn.db.hide then return true end
+
+    if btn.IsShown and not btn:IsShown() then
+        local parent = btn:GetParent()
+        return parent == Minimap or parent == MinimapBackdrop or btn.DragonUI_CollectorManaged or false
+    end
+
+    return false
+end
+
+local function ApplyCollectedButtonVisibility(btn, c)
+    if not btn or not c then return end
+
+    if IsAddonMinimapButtonHidden(btn) then
+        btn:Hide()
+        return
+    end
+
+    if c.isOpen then
+        btn:Show()
+    end
 end
 
 -- ----------------------------------------------------------------------------
@@ -443,7 +511,7 @@ local function RememberOrigin(btn)
         parent = btn:GetParent(),
         strata = btn:GetFrameStrata(),
         level  = btn:GetFrameLevel(),
-        shown  = btn:IsShown(),
+        shown  = not IsAddonMinimapButtonHidden(btn) and btn:IsShown(),
         alpha  = btn:GetAlpha(),
         scale  = btn:GetScale(),
         w = w, h = h,
@@ -470,7 +538,7 @@ local function RestoreOrigin(btn)
     if o.points then
         for _, p in ipairs(o.points) do btn:SetPoint(unpack(p)) end
     end
-    if o.shown then btn:Show() else btn:Hide() end
+    if IsAddonMinimapButtonHidden(btn) or not o.shown then btn:Hide() else btn:Show() end
     btn.DragonUI_CollectorOrigin = nil
 end
 
@@ -501,6 +569,12 @@ local function CollectEntries()
                      and g(child, "OnMouseDown") == nil) then
                 return
             end
+        end
+
+        if IsAddonMinimapButtonHidden(child) then
+            -- Hook while hidden so OnHookedShow can grab it the moment it shows.
+            HookButtonVisibility(child)
+            return
         end
 
         if seen[child] then return end
@@ -744,18 +818,38 @@ end
 local function OnHookedShow(self)
     local m = GetModule()
     if not m or not m.applied then return end
+    if IsAddonMinimapButtonHidden(self) then
+        self:Hide()
+        return
+    end
+    -- Reflow immediately so the grid stays compact and in sync.
     local c = GetCollector()
     if c and self:GetParent() == c then
-        if c.isOpen then self:Show() end
+        if c.isOpen then RefreshCollector() else self:Hide() end
     elseif self.DragonUI_CollectorManaged then
         self:Hide()
+    elseif self.DragonUI_CollectorVisibilityHooked then
+        -- First time visible after always being hidden: grab it now.
+        RefreshCollector()
     end
 end
 
-local function HookButtonVisibility(btn)
+local function OnHookedHide(self)
+    local m = GetModule()
+    if not m or not m.applied then return end
+    if not self.DragonUI_CollectorManaged then return end
+
+    local c = GetCollector()
+    if c and self:GetParent() == c and c.isOpen then
+        RefreshCollector()
+    end
+end
+
+HookButtonVisibility = function(btn)
     if btn.DragonUI_CollectorVisibilityHooked then return end
     btn.DragonUI_CollectorVisibilityHooked = true
     btn:HookScript("OnShow", OnHookedShow)
+    btn:HookScript("OnHide", OnHookedHide)
 end
 
 local function PositionCollectedButton(btn, c, index, skin)
@@ -814,7 +908,7 @@ local function EnforceCollectedButtonPlacement(btn)
     end
     PositionCollectedButton(btn, c, btn.DragonUI_CollectorIndex or 1, IsSkinEnabled())
     btn:SetAlpha(1)
-    if c.isOpen then btn:Show() end
+    ApplyCollectedButtonVisibility(btn, c)
     btn.DragonUI_CollectorRepositioning = nil
 end
 
@@ -872,7 +966,7 @@ local function PlaceCollectedButton(btn, c, index)
     PositionCollectedButton(btn, c, index, skin)
     HideWrapperFrame(btn)
 
-    if c.isOpen then btn:Show() end
+    ApplyCollectedButtonVisibility(btn, c)
 end
 
 -- ----------------------------------------------------------------------------
@@ -911,7 +1005,7 @@ local function RefreshAddonButtonsAfterDisable()
     end
 end
 
-local function RefreshCollector()
+local function RefreshCollectorImpl()
     if not IsEnabled() then
         RestoreCollectedToOrigin()
         HideCollectorImmediate()
@@ -926,9 +1020,22 @@ local function RefreshCollector()
     PositionCollector()
     ResizeCollector(c, #entries)
 
+    local placed = {}
     for i, e in ipairs(entries) do
         PlaceCollectedButton(e.button, c, i)
+        placed[e.button] = true
     end
+
+    ForEachChild(c, function(child)
+        if child.DragonUI_CollectorManaged and not placed[child] then
+            -- Still addon-hidden: park it hidden instead of restoring it.
+            if IsAddonMinimapButtonHidden(child) then
+                child:Hide()
+            else
+                RestoreOrigin(child)
+            end
+        end
+    end)
 
     if #entries == 0 then
         StopAnim(c)
@@ -959,6 +1066,13 @@ local function RefreshCollector()
     end
 end
 
+RefreshCollector = function()
+    if isRefreshingCollector then return end
+    isRefreshingCollector = true
+    RefreshCollectorImpl()
+    isRefreshingCollector = false
+end
+
 local function ToggleCollector()
     if not IsEnabled() then return end
     local c = CreateCollectorFrame()
@@ -976,12 +1090,23 @@ local function OnSettingsClick(self, mouseBtn)
         return
     end
     if mouseBtn == "RightButton" then
-        OpenInterfaceConfig()
+        ToggleInterfaceConfig()
     else
-        PlayCircleClick(self)
         ToggleCollector()
         UpdateHighlightStyle(self)
     end
+end
+
+local function OnSettingsMouseDown(self, mouseBtn)
+    if GetStyle() ~= STYLE_DUI then return end
+    self.DragonUI_PressZoom = true
+    LayoutSettingsIcon(self, true)
+    PlayCircleClick(self)
+end
+
+local function OnSettingsMouseUp(self)
+    self.DragonUI_PressZoom = nil
+    LayoutSettingsIcon(self, false)
 end
 
 local function OnSettingsEnter(self)
@@ -1014,6 +1139,8 @@ local function OnSettingsEnter(self)
 end
 
 local function OnSettingsLeave(self)
+    self.DragonUI_PressZoom = nil
+    LayoutSettingsIcon(self, false)
     if IsSettingsButtonFadeEnabled() and deps.fadeout then
         deps.fadeout(self)
     else
@@ -1029,6 +1156,10 @@ local function OnDragUpdate(self)
         PositionByAngle(self, a)
         SetStoredAngle(a)
         PositionCollector()
+        if self.DragonUI_PressZoom then
+            self.DragonUI_PressZoom = nil
+            LayoutSettingsIcon(self, false)
+        end
         self.DragonUI_DragMoved = true
     end
 end
@@ -1049,7 +1180,9 @@ end
 local function OnDragStop(self)
     if GetStyle() ~= STYLE_DUI then return end
     self.DragonUI_Dragging = false
+    self.DragonUI_PressZoom = nil
     self:SetScript("OnUpdate", nil)
+    LayoutSettingsIcon(self, false)
     PositionCollector()
     if self.DragonUI_DragMoved and GetTime then
         self.DragonUI_SuppressClickUntil = GetTime() + 0.2
@@ -1072,22 +1205,26 @@ local function CreateSettingsButton()
     btn:SetHitRectInsets(0, 0, 0, 0)
 
     local icon = btn:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
-    icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
     SetSettingsIcon(icon)
     btn.icon = icon
 
-    local ring = btn:CreateTexture(nil, "OVERLAY")
-    ring:SetAllPoints(btn)
+    local ringFrame = CreateFrame("Frame", nil, btn)
+    ringFrame:SetFrameLevel(btn:GetFrameLevel() + 6)
+    local ring = ringFrame:CreateTexture(nil, "OVERLAY")
+    ring:SetAllPoints(ringFrame)
     ring:SetTexture(BORDER_TEX)
     ring:SetVertexColor(1, 0.82, 0.28)
+    btn.ringFrame = ringFrame
     btn.circle = ring
 
     EnsureHighlight(btn)
     EnsureClassicGlow(btn)
+    LayoutSettingsIcon(btn, false)
 
     btn:RegisterForDrag("LeftButton")
     btn:SetScript("OnClick",     OnSettingsClick)
+    btn:SetScript("OnMouseDown", OnSettingsMouseDown)
+    btn:SetScript("OnMouseUp",   OnSettingsMouseUp)
     btn:SetScript("OnEnter",     OnSettingsEnter)
     btn:SetScript("OnLeave",     OnSettingsLeave)
     btn:SetScript("OnDragStart", OnDragStart)
@@ -1113,7 +1250,7 @@ local function ApplyClassicStyle(btn)
         btn.icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
         SetClassicIcon(btn.icon)
     end
-    if btn.circle then btn.circle:Hide() end
+    if btn.ringFrame then btn.ringFrame:Hide() end
 
     UpdateHighlightStyle(btn)
     btn.DragonUI_LastStyle = STYLE_CLASSIC
@@ -1125,14 +1262,12 @@ end
 
 local function ApplyDUIStyle(btn)
     btn:SetSize(deps.DRAGONUI_SETTINGS_BUTTON_SIZE, deps.DRAGONUI_SETTINGS_BUTTON_SIZE)
-    btn:SetScale(1.20)
+    btn:SetScale(1)
+    if btn.ringFrame then btn.ringFrame:Show() end
     if btn.icon then
-        btn.icon:ClearAllPoints()
-        btn.icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
-        btn.icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
         SetSettingsIcon(btn.icon)
+        LayoutSettingsIcon(btn, false)
     end
-    if btn.circle then btn.circle:Show() end
     UpdateHighlightStyle(btn)
     btn.DragonUI_LastStyle = STYLE_DUI
     PositionByAngle(btn, GetStoredAngle())

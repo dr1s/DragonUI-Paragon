@@ -137,7 +137,7 @@ local BD_EDITOR_BUTTON = {
     insets = { left = 0, right = 0, top = 0, bottom = 0 },
 }
 
-local function styleEditorButton(button)
+function addon.StyleEditorButton(button)
     -- Strip all template textures (Left/Middle/Right sub-textures)
     local name = button:GetName()
     if name then
@@ -191,7 +191,7 @@ local function createExitButton()
     exitEditorButton:SetFrameLevel(1000);
 
     -- Apply modern grey + blue style
-    styleEditorButton(exitEditorButton)
+    addon.StyleEditorButton(exitEditorButton)
 
     exitEditorButton:SetScript("OnClick", function()
         EditorMode:Toggle();
@@ -211,7 +211,7 @@ local function createResetAllButton()
     resetAllButton:SetFrameLevel(1000);
 
     -- Apply modern grey + blue style
-    styleEditorButton(resetAllButton)
+    addon.StyleEditorButton(resetAllButton)
 
     resetAllButton:SetScript("OnClick", function()
         EditorMode:ShowResetConfirmation()
@@ -299,6 +299,37 @@ local function createGridOverlay()
     gridOverlay:Hide()
 end
 
+function EditorMode:FlushPositions()
+    if errorMessagesMover and errorMessagesMover:IsShown() then
+        PersistErrorMessagesMoverPosition()
+    end
+end
+
+local function RaiseEditorStaticPopups()
+    local numDialogs = STATICPOPUP_NUMDIALOGS or 4
+    for i = 1, numDialogs do
+        local popup = _G["StaticPopup" .. i]
+        if popup and popup:IsShown() then
+            popup:SetFrameStrata("FULLSCREEN_DIALOG")
+            popup:SetFrameLevel(900 + i)
+        end
+    end
+end
+
+local function EnsureStaticPopupEditorHook()
+    if addon._editorStaticPopupHook then
+        return
+    end
+
+    addon._editorStaticPopupHook = true
+    hooksecurefunc("StaticPopup_Show", function()
+        if not EditorMode:IsActive() then
+            return
+        end
+        addon:After(0, RaiseEditorStaticPopups)
+    end)
+end
+
 function EditorMode:Show()
     if InCombatLockdown() then
         
@@ -309,6 +340,7 @@ function EditorMode:Show()
     createExitButton()
     createResetAllButton()
     SetupErrorMessagesMover()
+    EnsureStaticPopupEditorHook()
     gridOverlay:Show()
     exitEditorButton:Show()
     resetAllButton:Show()
@@ -320,18 +352,14 @@ function EditorMode:Show()
         addon.EnableActionBarOverlays()
     end
     
-    --  Maintain configured scales during editor mode
-    EditorMode:InstallScaleHooks()
-    
     -- Update overlay sizes after showing
     if addon.UpdateOverlaySizes then
         addon.UpdateOverlaySizes()
     end
-    
-    -- Refresh AceConfig to update button state
-    self:RefreshOptionsUI()
-    
-    
+
+    if addon.PositionPresets then
+        addon.PositionPresets:ShowPanel()
+    end
 end
 
 local errorFrameInit = CreateFrame("Frame")
@@ -343,6 +371,10 @@ end)
 
 
 function EditorMode:Hide(showReloadPopup)
+    if addon.PositionPresets then
+        addon.PositionPresets:HidePanel()
+    end
+
     if gridOverlay then gridOverlay:Hide() end
     if exitEditorButton then exitEditorButton:Hide() end
     if resetAllButton then resetAllButton:Hide() end
@@ -354,29 +386,12 @@ function EditorMode:Hide(showReloadPopup)
         addon.DisableActionBarOverlays()
     end
     
-    --  Remove scale hooks when exiting editor mode
-    EditorMode:RemoveScaleHooks()
-    
-    -- Refresh AceConfig to update button state
-    self:RefreshOptionsUI()
-    
     -- Only show reload UI popup if not coming from reset positions
     if showReloadPopup ~= false then
         StaticPopup_Show("DRAGONUI_RELOAD_UI")
     end
     
     
-end
-
-function EditorMode:RefreshOptionsUI()
-    -- Refresh AceConfig interface to update button states
-    -- Use scheduler to ensure it happens after state changes are complete
-    addon.core:ScheduleTimer(function()
-        local AceConfigRegistry = LibStub("AceConfigRegistry-3.0", true)
-        if AceConfigRegistry then
-            AceConfigRegistry:NotifyChange("DragonUI")
-        end
-    end, 0.1)
 end
 
 function EditorMode:Toggle()
@@ -397,52 +412,6 @@ SLASH_DRAGONUI_EDITOR1 = "/duiedit"
 SLASH_DRAGONUI_EDITOR2 = "/dragonedit"
 SlashCmdList["DRAGONUI_EDITOR"] = function()
     EditorMode:Toggle()
-end
-
--- Scale hooks to maintain configured scales during editor mode
-local scaleHooks = {}
-
-function EditorMode:InstallScaleHooks()
-    -- Disabled: conflicts with RetailUI pattern in mainbars.lua
-    -- Hook for MainMenuExpBar
-    --[[ 
-    if MainMenuExpBar and not scaleHooks.xpbar then
-        scaleHooks.xpbar = function()
-            if addon.db and addon.db.profile.xprepbar and addon.db.profile.xprepbar.expbar_scale then
-                MainMenuExpBar:SetScale(addon.db.profile.xprepbar.expbar_scale)
-            end
-        end
-        
-        -- Hook to events that can change the scale
-        hooksecurefunc(MainMenuExpBar, "SetScale", scaleHooks.xpbar)
-        hooksecurefunc(MainMenuExpBar, "SetPoint", scaleHooks.xpbar)
-        hooksecurefunc(MainMenuExpBar, "ClearAllPoints", scaleHooks.xpbar)
-    end
-    ]]--
-    
-    -- Disabled: conflicts with RetailUI pattern in mainbars.lua
-    -- Hook for ReputationWatchBar
-    --[[
-    if ReputationWatchBar and not scaleHooks.repbar then
-        scaleHooks.repbar = function()
-            if addon.db and addon.db.profile.xprepbar and addon.db.profile.xprepbar.repbar_scale then
-                ReputationWatchBar:SetScale(addon.db.profile.xprepbar.repbar_scale)
-            end
-        end
-        
-        -- Hook to events that can change the scale
-        hooksecurefunc(ReputationWatchBar, "SetScale", scaleHooks.repbar)
-        hooksecurefunc(ReputationWatchBar, "SetPoint", scaleHooks.repbar)
-        hooksecurefunc(ReputationWatchBar, "ClearAllPoints", scaleHooks.repbar)
-    end
-    ]]--
-end
-
-function EditorMode:RemoveScaleHooks()
-    -- Secure hooks cannot be removed directly,
-    -- so we simply mark them as removed so they don't execute
-    scaleHooks.xpbar = nil
-    scaleHooks.repbar = nil
 end
 
 function EditorMode:ShowResetConfirmation()
@@ -540,6 +509,12 @@ StaticPopupDialogs["DRAGONUI_RESET_ALL_POSITIONS"] = {
     text = L["Are you sure you want to reset all interface elements to their default positions?"],
     button1 = L["Yes"],
     button2 = L["No"],
+    OnShow = function(self)
+        if EditorMode:IsActive() then
+            self:SetFrameStrata("FULLSCREEN_DIALOG")
+            self:SetFrameLevel(950)
+        end
+    end,
     OnAccept = function()
         EditorMode:ResetAllPositions()
     end,

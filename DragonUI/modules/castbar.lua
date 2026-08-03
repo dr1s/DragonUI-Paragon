@@ -19,7 +19,7 @@ local GetSpellTexture, GetSpellInfo = GetSpellTexture, GetSpellInfo
 -- CONSTANTS AND TEXTURES
 -- ============================================================================
 
-local TEXTURE_PATH = "Interface\\AddOns\\DragonUI\\Textures\\CastbarOriginal\\"
+local TEXTURE_PATH = "Interface\\AddOns\\DragonUI\\Textures\\Castbar\\"
 local TEXTURES = {
     atlas = TEXTURE_PATH .. "uicastingbar2x",
     atlasSmall = TEXTURE_PATH .. "uicastingbar",
@@ -134,6 +134,23 @@ end
 local function IsEnabled(unitType)
     local cfg = GetConfig(unitType)
     return cfg and cfg.enabled
+end
+
+local function UsesModernIconBorder(cfg)
+    return addon.CreateIconFrameTexture ~= nil and not (cfg and cfg.modernIconBorder == false)
+end
+
+local function SetIconBordersShown(frames, shown, cfg)
+    local icon = frames.icon
+    if not icon then return end
+
+    local modern = shown and UsesModernIconBorder(cfg)
+    if icon.Border then
+        if shown and not modern then icon.Border:Show() else icon.Border:Hide() end
+    end
+    if icon.ModernBorder then
+        if modern then icon.ModernBorder:Show() else icon.ModernBorder:Hide() end
+    end
 end
 
 local function GetCastbarWidgetKey(unitType)
@@ -264,7 +281,16 @@ local function GetExtraAuraRowOffset(auraRows)
         return 0
     end
 
-    local rowStep = (_G.SMALL_AURA_SIZE or 17) + (_G.AURA_OFFSET_Y or 3)
+    -- _G.SMALL_AURA_SIZE never exists (FrameXML local); honor DragonUI custom sizes when active.
+    local smallSize = 17
+    if addon.GetCustomAuraSizes then
+        local buffSize, debuffSize = addon.GetCustomAuraSizes()
+        if buffSize then
+            smallSize = math.max(buffSize, debuffSize or buffSize)
+        end
+    end
+
+    local rowStep = smallSize + (_G.AURA_OFFSET_Y or 3)
     return (rows - 2) * rowStep
 end
 
@@ -325,6 +351,23 @@ local function GetSpellbarToLowestAuraOffset(unitType, unitFrame)
     return offset
 end
 
+-- 16 makes the geometric result pixel-identical to the old "-21 - extraAuraOffset" all-SMALL formula.
+local COMPANION_AURA_GAP = 16
+
+local function GetCompanionSpacingYOffset(unitType, unitFrame, extraAuraOffset)
+    local frameBottom = unitFrame and unitFrame.GetBottom and unitFrame:GetBottom()
+    local lowestBottom = GetLowestVisibleAuraBottom(unitType)
+    if frameBottom and lowestBottom then
+        local geoY = (lowestBottom - frameBottom) - COMPANION_AURA_GAP
+        if geoY < -21 then
+            return geoY
+        end
+        return -21
+    end
+
+    return -21 - extraAuraOffset
+end
+
 local function GetAuraStackGeometryOffset(unitType, unitFrame, auraAnchor, auraAnchorSource, fallbackOffset)
     if auraAnchorSource == "spellbarAnchor" then
         return 0
@@ -340,6 +383,12 @@ local function GetAuraStackGeometryOffset(unitType, unitFrame, auraAnchor, auraA
     local spellbarBottom = spellbarAnchor:GetBottom()
     if not auraBottom or not spellbarBottom then
         return offset
+    end
+
+    -- A LARGE aura later in the last row hangs below spellbarAnchor (tops align); track the true lowest icon.
+    local lowestBottom = GetLowestVisibleAuraBottom(unitType)
+    if lowestBottom and lowestBottom < spellbarBottom then
+        spellbarBottom = lowestBottom
     end
 
     local geometryOffset = auraBottom - spellbarBottom
@@ -722,13 +771,14 @@ end
 -- SHIELD SYSTEM
 -- ============================================================================
 
-local function CreateShield(parent, icon, frameName, iconSize)
-    if not parent or not icon then
+-- Sibling of castbar so the shield can render behind the icon.
+local function CreateShield(container, castbar, icon, frameName, iconSize)
+    if not container or not castbar or not icon then
         return nil
     end
-    
-    local shield = CreateFrame("Frame", frameName .. "Shield", parent)
-    shield:SetFrameLevel(parent:GetFrameLevel() - 1)
+
+    local shield = CreateFrame("Frame", frameName .. "Shield", container)
+    shield:SetFrameLevel(max(0, castbar:GetFrameLevel() - 1))
     shield:SetSize(iconSize * 1.8, iconSize * 2.0)
     
     local texture = shield:CreateTexture(nil, "ARTWORK", nil, 3)
@@ -1093,10 +1143,14 @@ local function CreateCastbar(unitType)
     iconBorder:SetVertexColor(0.8, 0.8, 0.8, 1)
     iconBorder:Hide()
     frames.icon.Border = iconBorder
+
+    if addon.CreateIconFrameTexture then
+        frames.icon.ModernBorder = addon.CreateIconFrameTexture(frames.castbar, 'OVERLAY')
+    end
     
     -- Shield (for target/focus only — player casts are always interruptible in 3.3.5a)
     if unitType ~= "player" then
-        frames.shield = CreateShield(frames.castbar, frames.icon, frameName, 20)
+        frames.shield = CreateShield(frames.container, frames.castbar, frames.icon, frameName, 20)
     end
     
     -- Apply texture clipping system
@@ -1184,12 +1238,13 @@ end
 -- ============================================================================
 
 function CastbarModule:HandleCastStart_Simple(unitType, unit, isChanneling)
-    local spell, icon, startTime, endTime, notInterruptible
-    
+    local spell, icon, startTime, endTime, notInterruptible, castID
+
     if isChanneling then
         spell, _, _, icon, startTime, endTime, _, notInterruptible = UnitChannelInfo(unit)
+        castID = nil -- UnitChannelInfo has no castID in 3.3.5a
     else
-        spell, _, _, icon, startTime, endTime, _, _, notInterruptible = UnitCastingInfo(unit)
+        spell, _, _, icon, startTime, endTime, _, castID, notInterruptible = UnitCastingInfo(unit)
     end
     
     if not spell then
@@ -1212,7 +1267,8 @@ function CastbarModule:HandleCastStart_Simple(unitType, unit, isChanneling)
     castbar.startTime = start
     castbar.endTime = finish
     castbar.spellName = spell
-    
+    castbar.castID = castID -- match FAILED/INTERRUPTED like CastingBarFrame (nil for channels)
+
     -- Cancel any active fade
     castbar.fadeOutEx = false
     if frames.container then
@@ -1322,16 +1378,12 @@ function CastbarModule:HandleCastStart_Simple(unitType, unit, isChanneling)
     if frames.icon and cfg and cfg.showIcon then
         frames.icon:SetTexture(GetSpellIcon(spell, icon))
         frames.icon:Show()
-        if frames.icon.Border then
-            frames.icon.Border:Show()
-        end
+        SetIconBordersShown(frames, true, cfg)
     else
         if frames.icon then
             frames.icon:Hide()
         end
-        if frames.icon and frames.icon.Border then
-            frames.icon.Border:Hide()
-        end
+        SetIconBordersShown(frames, false, cfg)
         -- Hide shield when icon is hidden (shield anchors to icon)
         if frames.shield then
             frames.shield:Hide()
@@ -1463,12 +1515,7 @@ function CastbarModule:HandleCastStop_Simple(unitType, wasInterrupted, isChannel
     end
 end
 
-function CastbarModule:HandleCastFailed_Simple(unitType, eventSpell)
-    -- UNIT_SPELLCAST_FAILED fires in two cases:
-    --   1) A spell failed to START (pressed another ability while casting) → ignore
-    --   2) The current cast was externally interrupted (CC/kick on target) → show "Failed"
-    -- Distinguish by comparing the event's spell name with the tracked cast:
-    --   same spell = real interruption; different spell = queued spell failure.
+function CastbarModule:HandleCastFailed_Simple(unitType, eventSpell, _, eventCastID)
     local frames = self.frames[unitType]
     if not frames or not frames.castbar then return end
     local castbar = frames.castbar
@@ -1476,7 +1523,7 @@ function CastbarModule:HandleCastFailed_Simple(unitType, eventSpell)
 
     local unit = (unitType == "player") and "player" or unitType
 
-    -- Ignore FAILED spam produced by re-pressing the same channel while it is still active.
+    -- Ignore FAILED spam from re-pressing the same channel while it is still active.
     if castbar.channelingEx then
         local activeChannelSpell = UnitChannelInfo(unit)
         if activeChannelSpell and castbar.spellName and activeChannelSpell == castbar.spellName then
@@ -1484,12 +1531,34 @@ function CastbarModule:HandleCastFailed_Simple(unitType, eventSpell)
         end
     end
 
-    -- If the event spell doesn't match our tracked cast, it's a queued spell failure
-    if eventSpell and castbar.spellName and eventSpell ~= castbar.spellName then
+    -- Same-name re-press / other macro spells differ by castID; channels fall back to name.
+    if castbar.castID then
+        if eventCastID ~= castbar.castID then
+            return
+        end
+    elseif eventSpell and castbar.spellName and eventSpell ~= castbar.spellName then
         return
     end
 
     self:HandleCastStop_Simple(unitType, true, nil, FAILED)
+end
+
+-- INTERRUPTED used to kill any active bar; gate on castID (or spell name for channels).
+function CastbarModule:HandleCastInterrupted_Simple(unitType, isChannel, eventSpell, _, eventCastID)
+    local frames = self.frames[unitType]
+    if not frames or not frames.castbar then return end
+    local castbar = frames.castbar
+    if not (castbar.castingEx or castbar.channelingEx) then return end
+
+    if castbar.castID then
+        if eventCastID ~= castbar.castID then
+            return
+        end
+    elseif eventSpell and castbar.spellName and eventSpell ~= castbar.spellName then
+        return
+    end
+
+    self:HandleCastStop_Simple(unitType, true, isChannel)
 end
 
 function CastbarModule:HandleCastDelayed_Simple(unitType, unit)
@@ -1671,7 +1740,7 @@ function CastbarModule:RefreshCastbar(unitType)
                 anchorPoint = "TOPLEFT"
                 relativePoint = "BOTTOMLEFT"
                 xPos = 25
-                yPos = -21 - extraAuraOffset
+                yPos = GetCompanionSpacingYOffset("target", TargetFrame, extraAuraOffset)
             elseif auraAnchor then
                 anchorFrame = (isDetached and TargetFrame and TargetFrame.spellbarAnchor) and TargetFrame.spellbarAnchor or auraAnchor
                 anchorPoint = "TOPLEFT"
@@ -1757,7 +1826,7 @@ function CastbarModule:RefreshCastbar(unitType)
                 anchorPoint = "TOPLEFT"
                 relativePoint = "BOTTOMLEFT"
                 xPos = 25
-                yPos = -21 - extraAuraOffset
+                yPos = GetCompanionSpacingYOffset("focus", FocusFrame, extraAuraOffset)
             elseif auraAnchor then
                 anchorFrame = (isDetached and FocusFrame and FocusFrame.spellbarAnchor) and FocusFrame.spellbarAnchor or auraAnchor
                 anchorPoint = "TOPLEFT"
@@ -1835,7 +1904,12 @@ function CastbarModule:RefreshCastbar(unitType)
             frames.icon.Border:SetPoint('CENTER', frames.icon, 'CENTER', 0, 0)
             frames.icon.Border:SetSize(iconSize * 1.7, iconSize * 1.7)
         end
-        
+
+        if frames.icon.ModernBorder then
+            addon.LayoutIconFrameTexture(frames.icon.ModernBorder, frames.icon, iconSize)
+        end
+        SetIconBordersShown(frames, frames.icon:IsShown() and cfg.showIcon, cfg)
+
         if frames.shield then
             if unitType == "player" then
                 frames.shield:ClearAllPoints()
@@ -1981,9 +2055,9 @@ function CastbarModule:HandleCastingEvent(event, unit, ...)
     elseif event == 'UNIT_SPELLCAST_FAILED' then
         self:HandleCastFailed_Simple(unitType, ...)
     elseif event == 'UNIT_SPELLCAST_INTERRUPTED' then
-        self:HandleCastStop_Simple(unitType, true)
+        self:HandleCastInterrupted_Simple(unitType, false, ...)
     elseif event == 'UNIT_SPELLCAST_CHANNEL_INTERRUPTED' then
-        self:HandleCastStop_Simple(unitType, true)
+        self:HandleCastInterrupted_Simple(unitType, true, ...)
     elseif event == 'UNIT_SPELLCAST_DELAYED' or event == 'UNIT_SPELLCAST_CHANNEL_UPDATE' then
         self:HandleCastDelayed_Simple(unitType, unit)
     elseif event == 'UNIT_SPELLCAST_NOT_INTERRUPTIBLE' then
@@ -2671,6 +2745,12 @@ local function OnEvent(self, event, unit, ...)
     else
         CastbarModule:HandleCastingEvent(event, unit, ...)
     end
+end
+
+function addon.ApplyCastbarWidgetPositions()
+    ApplyWidgetPosition()
+    ApplyCastbarWidgetPosition("target")
+    ApplyCastbarWidgetPosition("focus")
 end
 
 -- Public API

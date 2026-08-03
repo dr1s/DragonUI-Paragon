@@ -60,14 +60,14 @@ local PLAYER_BORDER_WIDTH = 256
 local PLAYER_BORDER_HEIGHT = 128
 
 -- Dedicated player corner embellishment (normal state) from standalone texture.
-local PLAYER_CORNER_TEXTURE = "Interface\\AddOns\\DragonUI\\Textures\\ui-hud-unitframe-player-portraiton-cornerembellishment-2x"
+local PLAYER_CORNER_TEXTURE = "Interface\\AddOns\\DragonUI\\Textures\\UnitFrames\\Player\\ui-hud-unitframe-player-portraiton-cornerembellishment-2x"
 local PLAYER_CORNER_TEX_COORDS = {
     0, 44 / 64,
     0, 44 / 64
 }
 
 -- Combat icon uses the white crossed-swords glyph from atlas crop.
-local PLAYER_COMBAT_ICON_TEXTURE = "Interface\\AddOns\\DragonUI\\Textures\\uiunitframe2x_ptr_icons_crop"
+local PLAYER_COMBAT_ICON_TEXTURE = "Interface\\AddOns\\DragonUI\\Textures\\UnitFrames\\Player\\uiunitframe2x_ptr_icons_crop"
 local PLAYER_COMBAT_ICON_TEX_COORDS = {
     2 / 256, 32 / 256,   -- x: 2..31 (exclusive right edge at 32)
     63 / 256, 90 / 256   -- y: 63..89 (exclusive bottom edge at 90)
@@ -130,14 +130,24 @@ local ELITE_STATUS_PULSE_SETTINGS = {
 -- Event lookup tables for O(1) performance
 local HEALTH_EVENTS = {
     UNIT_HEALTH = true,
-    UNIT_MAXHEALTH = true,
-    UNIT_HEALTH_FREQUENT = true
+    UNIT_MAXHEALTH = true
 }
 
+-- 3.3.5a has no UNIT_POWER/UNIT_MAXPOWER; power changes fire one event per power token.
 local POWER_EVENTS = {
-    UNIT_MAXMANA = true,
     UNIT_DISPLAYPOWER = true,
-    UNIT_POWER_UPDATE = true
+    UNIT_MANA = true,
+    UNIT_RAGE = true,
+    UNIT_FOCUS = true,
+    UNIT_ENERGY = true,
+    UNIT_HAPPINESS = true,
+    UNIT_RUNIC_POWER = true,
+    UNIT_MAXMANA = true,
+    UNIT_MAXRAGE = true,
+    UNIT_MAXFOCUS = true,
+    UNIT_MAXENERGY = true,
+    UNIT_MAXHAPPINESS = true,
+    UNIT_MAXRUNIC_POWER = true
 }
 
 -- Rune type coordinates
@@ -264,7 +274,7 @@ local function GetPowerBarTexture(powerTypeString)
             return MANABAR_TEXTURE_OVERRIDES[textureSetting]
         end
     end
-    
+
     -- Default DragonUI per-power-type textures (normal mode always uses these)
     return TEXTURES.POWER_BARS[powerTypeString] or TEXTURES.POWER_BARS.MANA
 end
@@ -421,7 +431,11 @@ end
 
 -- Remove unwanted Blizzard frame elements
 local function RemoveBlizzardFrames(isVehicle)
-    local elementsToHide = {"PlayerAttackIcon", "PlayerFrameBackground", "PlayerAttackBackground", "PlayerGuideIcon",
+
+    -- NOTE: PlayerGuideIcon is intentionally NOT in this list — it's the LFG
+    -- "dungeon leader" flag (shares LeaderIcon's anchor, shown instead of it for
+    -- LFG-formed groups), not decorative clutter. See UpdateLeaderIconPosition().
+    local elementsToHide = {"PlayerAttackIcon", "PlayerFrameBackground", "PlayerAttackBackground",
                             "PlayerFrameGroupIndicatorLeft", "PlayerFrameGroupIndicatorRight",
                             "ParagonCharacterLevel"}
 
@@ -906,40 +920,44 @@ end
 
 -- Cache leadership and PVP icons
 local PlayerLeaderIcon = _G.PlayerLeaderIcon
+local PlayerGuideIcon = _G.PlayerGuideIcon
 local PlayerMasterIcon = _G.PlayerMasterIcon
 local PlayerPVPIcon = _G.PlayerPVPIcon
 
 -- Update leader icon positioning based on dragon decoration mode
+-- GuideIcon shares LeaderIcon's anchor point (Blizzard shows only one at a time:
+-- GuideIcon for LFG-formed groups, LeaderIcon otherwise), so both need the same treatment.
 local function UpdateLeaderIconPosition()
-    if not PlayerLeaderIcon then
-        return
-    end
-
     local config = GetPlayerConfig()
     local decorationType = config.dragon_decoration or "none"
     local isEliteMode = decorationType == "elite" or decorationType == "rareelite"
+    local dragonFrame = _G["DragonUIUnitframeFrame"]
+    local icons = {PlayerLeaderIcon, PlayerGuideIcon}
 
-    PlayerLeaderIcon:ClearAllPoints()
+    for i = 1, 2 do
+        local icon = icons[i]
+        if icon then
+            icon:ClearAllPoints()
 
-    if isEliteMode then
-        -- In elite mode: reparent to EliteIconContainer so the icon renders
-        -- above the dragon decoration textures (strata HIGH, level 1000).
-        -- Same pattern used by UpdateMasterIconPosition.
-        local dragonFrame = _G["DragonUIUnitframeFrame"]
-        if dragonFrame and dragonFrame.EliteIconContainer then
-            PlayerLeaderIcon:SetParent(dragonFrame.EliteIconContainer)
+            if isEliteMode then
+                -- In elite mode: reparent to EliteIconContainer so the icon renders
+                -- above the dragon decoration textures (strata HIGH, level 1000).
+                -- Same pattern used by UpdateMasterIconPosition.
+                if dragonFrame and dragonFrame.EliteIconContainer then
+                    icon:SetParent(dragonFrame.EliteIconContainer)
+                end
+                icon:SetPoint('BOTTOM', PlayerFrame, "TOP", -1, -33)
+            else
+                -- Non-elite mode: STILL use EliteIconContainer so the icon renders
+                -- above the portrait overlay (level +2) and border overlay (level +3).
+                -- If we parented to PlayerFrame directly, the icon (a texture) would
+                -- draw below all child overlay frames and be hidden behind the border.
+                if dragonFrame and dragonFrame.EliteIconContainer then
+                    icon:SetParent(dragonFrame.EliteIconContainer)
+                end
+                icon:SetPoint('BOTTOM', PlayerFrame, "TOP", -70, -25)
+            end
         end
-        PlayerLeaderIcon:SetPoint('BOTTOM', PlayerFrame, "TOP", -1, -33)
-    else
-        -- Non-elite mode: STILL use EliteIconContainer so the icon renders
-        -- above the portrait overlay (level +2) and border overlay (level +3).
-        -- If we parented to PlayerFrame directly, the icon (a texture) would
-        -- draw below all child overlay frames and be hidden behind the border.
-        local dragonFrame = _G["DragonUIUnitframeFrame"]
-        if dragonFrame and dragonFrame.EliteIconContainer then
-            PlayerLeaderIcon:SetParent(dragonFrame.EliteIconContainer)
-        end
-        PlayerLeaderIcon:SetPoint('BOTTOM', PlayerFrame, "TOP", -70, -25)
     end
 end
 
@@ -978,12 +996,12 @@ local function UpdateDragonVisibilityForVehicle(inVehicle, hasEliteDecoration)
     if not dragonFrame then
         return
     end
-    
+
     -- Dragon decoration texture (only relevant with elite/rareelite decoration)
     if hasEliteDecoration and dragonFrame.PlayerDragonDecoration then
         dragonFrame.PlayerDragonDecoration:SetAlpha(inVehicle and 0 or 1)
     end
-    
+
     -- Update glow visibility: switches between atlas-based glows (vehicle)
     -- and DragonUI custom glows (normal) based on current vehicle/combat/rest state
     UpdateGlowVisibility()
@@ -995,7 +1013,7 @@ local function UpdatePVPTimerPosition(isEliteMode)
     if not pvpTimerText then
         return
     end
-    
+
     -- ONLY modify if there's elite decoration (elite, rareelite, worldboss, etc.)
     if isEliteMode then
         -- With elite decoration: use the SAME parent as the PVP icon (already above)
@@ -1004,11 +1022,11 @@ local function UpdatePVPTimerPosition(isEliteMode)
             -- 1. Reparent to the same container as the PVP icon
             pvpTimerText:SetParent(dragonFrame.EliteIconContainer)
             pvpTimerText:SetDrawLayer("OVERLAY", 7)
-            
+
             -- 2. Reposition the timer (adjust these coordinates as needed)
             pvpTimerText:ClearAllPoints()
             pvpTimerText:SetPoint("CENTER", PlayerPVPIcon, "LEFT", 22, 38)  -- To the left of the icon
-            
+
             -- Optional: adjust text size for better visibility
             pvpTimerText:SetFont(pvpTimerText:GetFont(), 11, "OUTLINE")
         end
@@ -1049,7 +1067,7 @@ local function UpdatePVPIconPosition()
             PlayerPVPIcon:SetPoint("TOPRIGHT", PlayerFrame, "TOPRIGHT", -155, -22)
         end
     end
-    
+
     -- Reposition the PVP timer based on mode
     UpdatePVPTimerPosition(isEliteMode)
 end
@@ -1189,7 +1207,7 @@ local function SetupAlternateManaTextElements()
     if not alternateManaBar or not addon.TextSystem then
         return
     end
-    
+
     -- Create dual text elements using TextSystem
     addon.TextSystem.CreateDualTextElements(
         alternateManaBar, -- parentFrame
@@ -1206,28 +1224,28 @@ local function UpdateAlternateManaText()
     if not alternateManaBar or not addon.TextSystem then
         return
     end
-    
+
     -- Get current mana values
     local currentMana = UnitPower("player", POWER_TYPE_MANA or 0)
     local maxMana = UnitPowerMax("player", POWER_TYPE_MANA or 0)
-    
+
     if not currentMana or not maxMana or maxMana == 0 then
         return
     end
-    
+
     -- Get configuration
     local config = GetPlayerConfig()
     local textFormat = config and config.alternateManaFormat or "both"
     local useBreakup = config and config.breakUpLargeNumbers
-    
+
     -- Custom handling for alternate mana bar
     if textFormat == "both" then
         -- Custom separation for alternate mana bar - adjust spacing here
         local currentText = useBreakup and addon.TextSystem.AbbreviateLargeNumbers(currentMana) or tostring(currentMana)
         local percent = math.floor((currentMana / maxMana) * 100)
-        local customSeparator = "    " -- Custom spacing for alternate mana bar (adjust here) 
+        local customSeparator = "    " -- Custom spacing for alternate mana bar (adjust here)
         local combinedText = percent .. "%" .. customSeparator .. currentText
-        
+
         -- Use as single text instead of dual
         addon.TextSystem.UpdateDualText(
             alternateManaBar,
@@ -1239,13 +1257,13 @@ local function UpdateAlternateManaText()
     else
         -- Use normal TextSystem for other formats
         local formattedText = addon.TextSystem.FormatStatusText(
-            currentMana, 
-            maxMana, 
-            textFormat, 
-            useBreakup, 
+            currentMana,
+            maxMana,
+            textFormat,
+            useBreakup,
             "alternateMana"
         )
-        
+
         addon.TextSystem.UpdateDualText(
             alternateManaBar,
             "AlternateMana",
@@ -1262,10 +1280,10 @@ local function SetupAlternateManaAlwaysVisible()
     if not alternateManaBar then
         return
     end
-    
+
     -- Phase 3C: Disable hover mode via flag (can't unhook HookScript)
     alternateManaBar.DragonUIHoverEnabled = false
-    
+
     -- Show text immediately and keep it visible
     UpdateAlternateManaText()
 end
@@ -1276,13 +1294,13 @@ local function HideAlternateManaTextElements()
     if not alternateManaBar or not addon.TextSystem then
         return
     end
-    
+
     -- Hide all text elements
     addon.TextSystem.UpdateDualText(
         alternateManaBar,
-        "AlternateMana", 
-        "", 
-        "numeric", 
+        "AlternateMana",
+        "",
+        "numeric",
         false -- shouldShow = false
     )
 end
@@ -1293,10 +1311,10 @@ local function SetupAlternateManaHoverBehavior()
     if not alternateManaBar then
         return
     end
-    
+
     -- Hide text initially
     HideAlternateManaTextElements()
-    
+
     -- Phase 3C: Use HookScript instead of SetScript on Blizzard frame
     -- Hook only once, use flag to enable/disable behavior
     if not alternateManaBar.DragonUIHoverHooked then
@@ -1305,7 +1323,7 @@ local function SetupAlternateManaHoverBehavior()
                 UpdateAlternateManaText()
             end
         end)
-        
+
         alternateManaBar:HookScript("OnLeave", function()
             if alternateManaBar.DragonUIHoverEnabled then
                 HideAlternateManaTextElements()
@@ -1313,7 +1331,7 @@ local function SetupAlternateManaHoverBehavior()
         end)
         alternateManaBar.DragonUIHoverHooked = true
     end
-    
+
     alternateManaBar.DragonUIHoverEnabled = true
 end
 
@@ -1323,26 +1341,26 @@ local function SetupAlternateManaBarAlwaysVisible()
     if playerClass ~= "DRUID" then
         return
     end
-    
+
     local alternateManaBar = _G.PlayerFrameAlternateManaBar
     if not alternateManaBar then
         return
     end
-    
+
     -- ALWAYS hide Blizzard text - we always use DragonUI system for druids
     local blizzardText = alternateManaBar.TextString or _G.PlayerFrameAlternateManaBarText
     if blizzardText then
         blizzardText:Hide()
         blizzardText:SetAlpha(0)
     end
-    
+
     -- ALWAYS setup DragonUI text elements for druids
     SetupAlternateManaTextElements()
-    
+
     -- Get configuration to determine visibility behavior
     local config = GetPlayerConfig()
     local alwaysShow = config and config.alwaysShowAlternateManaText
-    
+
     if alwaysShow then
         -- Show DragonUI text always
         UpdateAlternateManaText()
@@ -1393,7 +1411,7 @@ local function UpdatePlayerDragonDecoration()
     local inVehicle = IsInVehicle()
 
     if decorationType ~= "none" and not inVehicle then
-        -- Dragon decoration active (and not in vehicle): use target textures (flipped) 
+        -- Dragon decoration active (and not in vehicle): use target textures (flipped)
         -- GetDecorationBackground/Border will pick fat variant if fat is enabled
         local decorBg = GetDecorationBackground()
         local decorBorder = GetDecorationBorder()
@@ -1592,7 +1610,7 @@ local function UpdatePlayerDragonDecoration()
             if PlayerFrameVehicleTexture then
                 PlayerFrameVehicleTexture:ClearAllPoints()
                 PlayerFrameVehicleTexture:SetPoint('TOPLEFT', PlayerFrame, 'TOPLEFT', 35, 0)
-                SetAtlasTexture(PlayerFrameVehicleTexture, 'PlayerFrame-TextureFrame-Vehicle')
+                PlayerFrameVehicleTexture:set_atlas('PlayerFrame-TextureFrame-Vehicle', true)
                 PlayerFrameVehicleTexture:SetDrawLayer('BORDER') -- Below flash/status OVERLAY
                 PlayerFrameVehicleTexture:SetBlendMode('BLEND') -- Normal rendering (not ADD)
                 PlayerFrameVehicleTexture:SetVertexColor(1, 1, 1, 1) -- No tint
@@ -1683,7 +1701,7 @@ local function UpdatePlayerDragonDecoration()
 
     -- Create dragon texture in high strata frame
     local dragon = dragonParent:CreateTexture(nil, "OVERLAY")
-    dragon:SetTexture("Interface\\AddOns\\DragonUI\\Textures\\uiunitframeboss2x")
+    dragon:SetTexture("Interface\\AddOns\\DragonUI\\Textures\\UnitFrames\\uiunitframeboss2x")
     dragon:SetTexCoord(coords.texCoord[1], coords.texCoord[2], coords.texCoord[3], coords.texCoord[4])
     dragon:SetAllPoints(dragonParent)
 
@@ -1808,7 +1826,7 @@ local function CreatePlayerFrameTextures()
         vehicleCombatFrame:Hide()
 
         local vehicleCombatTexture = vehicleCombatFrame:CreateTexture(nil, "OVERLAY", nil, 7)
-        SetAtlasTexture(vehicleCombatTexture, 'PlayerFrame-TextureFrame-Vehicle')
+        vehicleCombatTexture:set_atlas('PlayerFrame-TextureFrame-Vehicle', true)
         vehicleCombatTexture:ClearAllPoints()
         vehicleCombatTexture:SetPoint('TOPLEFT', vehicleCombatFrame, 'TOPLEFT', 0, 0)
         vehicleCombatTexture:SetBlendMode("ADD")
@@ -1827,7 +1845,7 @@ local function CreatePlayerFrameTextures()
         vehicleStatusFrame:Hide()
 
         local vehicleStatusTexture = vehicleStatusFrame:CreateTexture(nil, "OVERLAY", nil, 7)
-        SetAtlasTexture(vehicleStatusTexture, 'PlayerFrame-TextureFrame-Vehicle')
+        vehicleStatusTexture:set_atlas('PlayerFrame-TextureFrame-Vehicle', true)
         vehicleStatusTexture:ClearAllPoints()
         vehicleStatusTexture:SetPoint('TOPLEFT', vehicleStatusFrame, 'TOPLEFT', 0, 0)
         vehicleStatusTexture:SetBlendMode("ADD")
@@ -2047,7 +2065,7 @@ local function ChangePlayerframe()
     -- Configure portrait with vehicle-specific positioning
     PlayerPortrait:ClearAllPoints()
     PlayerPortrait:SetDrawLayer('ARTWORK', 2)  -- Lower layer so border is on top
-    
+
     if hasVehicleUI then
         -- Vehicle: position relative to PlayerFrame (matches RetailUI pattern)
         PlayerPortrait:SetPoint('LEFT', PlayerFrame, 'LEFT', 45, 5)
@@ -2057,7 +2075,7 @@ local function ChangePlayerframe()
         PlayerPortrait:SetPoint('TOPLEFT', PlayerFrame, 'TOPLEFT', 42, -15)
         PlayerPortrait:SetSize(56, 56)
     end
-    
+
     -- Apply class portrait if enabled
     UpdatePlayerClassPortrait()
 
@@ -2134,7 +2152,7 @@ local function ChangePlayerframe()
     local powerTexture = GetPowerBarTexture(powerTypeString)
     PlayerFrameManaBar:GetStatusBarTexture():SetTexture(powerTexture)
 
-    -- Configure status and flash textures 
+    -- Configure status and flash textures
     -- In vehicle: hide our custom glow effects (vehicle frame doesn't use them)
     local dragonFrame = _G["DragonUIUnitframeFrame"]
     local baseTexture = GetBaseTexture()
@@ -2328,7 +2346,7 @@ local function ApplyPlayerConfig()
 
     UpdatePlayerDragonDecoration()
     UpdateGlowVisibility()
-    
+
     -- Setup alternate mana bar text to always be visible for druids
     SetupAlternateManaBarAlwaysVisible()
 
@@ -2374,9 +2392,20 @@ local function RefreshPlayerFrame()
     if Module.textSystem then
         Module.textSystem.update()
     end
-    
+
     --  Alternate mana bar text visibility is configured once in ApplyPlayerConfig()
 
+    -- Fade PlayerFrame and its detached decoration frame together (see uf_core.lua UF.GetConfig)
+    if addon.VisibilityFade then
+        local dragonFrame = _G["DragonUIUnitframeFrame"]
+        addon.VisibilityFade.Register("player", PlayerFrame, {
+            frames = { dragonFrame },
+            dbTable = function() return addon.UF.GetConfig("player") end,
+            hoverFrames = { PlayerFrame, PlayerFrameHealthBar, PlayerFrameManaBar },
+            clickThrough = true,
+        })
+        addon.VisibilityFade.Update("player")
+    end
 end
 
 -- ============================================================================
@@ -2409,7 +2438,7 @@ local function InitializePlayerFrame()
         end
     end
 
-    
+
     -- These are hooked at file scope below with richer logic (vehicle transitions section)
     -- HandleRuneFrameVehicleTransition is called from the file-scope hooks instead
 
@@ -2447,7 +2476,7 @@ local function InitializePlayerFrame()
     else
         RegisterBlizzardHooks()
     end
-    
+
     -- Alternate mana bar text setup done once in ApplyPlayerConfig() - no need for hooks
 
     -- Hook to update PVP timer position when it appears/changes
@@ -2574,6 +2603,18 @@ local function InitializePlayerFrame()
             manaColorGuard = true
             UpdateManaBarColor(self)
             manaColorGuard = false
+        end)
+    end
+
+    -- Blizzard re-Shows this bar on its own (e.g. UnitFrameManaBar_UpdateType), undoing "hide mana bar".
+    if PlayerFrameManaBar then
+        hooksecurefunc(PlayerFrameManaBar, "Show", function(self)
+            if IsFatHealthbarActive() then
+                local _, _, hidden = GetFatManaConfig()
+                if hidden then
+                    self:Hide()
+                end
+            end
         end)
     end
 
@@ -2776,7 +2817,7 @@ local function SetupPlayerEvents()
                 if Module.textSystem and Module.textSystem.update then
                     Module.textSystem.update()
                 end
-                
+
                 -- Hide dragon decoration when entering vehicle
                 local config = GetPlayerConfig()
                 local decorationType = config.dragon_decoration or "none"
@@ -2793,7 +2834,7 @@ local function SetupPlayerEvents()
                 if Module.textSystem and Module.textSystem.update then
                     Module.textSystem.update()
                 end
-                
+
                 -- Show dragon decoration when exiting vehicle
                 local config = GetPlayerConfig()
                 local decorationType = config.dragon_decoration or "none"
@@ -2804,7 +2845,7 @@ local function SetupPlayerEvents()
                     PlayerFrameHealthBar:GetScript("OnEvent")(PlayerFrameHealthBar, "UNIT_HEALTH", "player")
                 end
                 if PlayerFrameManaBar then
-                    PlayerFrameManaBar:GetScript("OnEvent")(PlayerFrameManaBar, "UNIT_POWER_UPDATE", "player")
+                    PlayerFrameManaBar:GetScript("OnEvent")(PlayerFrameManaBar, "UNIT_MANA", "player")
                     -- FIX: Restore white tint for texture purity
                     UpdateManaBarColor(PlayerFrameManaBar)
                 end
@@ -2916,24 +2957,24 @@ hooksecurefunc("PlayerFrame_ToPlayerArt", function()
     else
         ApplyWidgetPosition()
     end
-    
+
     -- Non-secure visual operations — safe even in combat
     HandleRuneFrameVehicleTransition(false)
-    
+
     -- Restore dragon decoration visibility
     local config = GetPlayerConfig()
     local decorationType = config.dragon_decoration or "none"
     local isEliteMode = decorationType == "elite" or decorationType == "rareelite"
     UpdateDragonVisibilityForVehicle(false, isEliteMode)
-    
+
     -- Update glow state (switches from vehicle to normal glow frames)
     UpdateGlowVisibility()
-    
+
     -- Full layout re-apply (child frame positioning is non-secure and works in combat)
     ChangePlayerframe()
     UpdatePlayerDragonDecoration()
     UpdateLeadershipIcons()
-    
+
     -- Delayed retry for robustness (decorations need a frame or two to settle)
     if not Module.vehicleDelayFrame then
         Module.vehicleDelayFrame = CreateFrame("Frame")
@@ -3014,7 +3055,7 @@ hooksecurefunc(PlayerFrame, "SetPoint", function(self, point, relativeTo, relati
     if InCombatLockdown() then return end
     -- Skip if this is our own call (prevent infinite loop)
     if self.DragonUI_SettingPoint then return end
-    
+
     -- Only intercept Blizzard auto-repositioning (vehicle transitions, level-up, etc.)
     -- Blizzard anchors PlayerFrame to UIParent with TOPLEFT or CENTER
     if point and relativeTo == UIParent and (point == "TOPLEFT" or point == "CENTER") then
@@ -3039,9 +3080,9 @@ end
 
 -- Register profile callbacks
 if addon.db and addon.db.RegisterCallback then
-    addon.db.RegisterCallback(addon, "OnProfileChanged", OnProfileChanged)
-    addon.db.RegisterCallback(addon, "OnProfileCopied", OnProfileChanged)
-    addon.db.RegisterCallback(addon, "OnProfileReset", OnProfileChanged)
+    addon.db.RegisterCallback(Module, "OnProfileChanged", OnProfileChanged)
+    addon.db.RegisterCallback(Module, "OnProfileCopied", OnProfileChanged)
+    addon.db.RegisterCallback(Module, "OnProfileReset", OnProfileChanged)
 end
 
 -- Expose public API
@@ -3057,4 +3098,3 @@ addon.PlayerFrame = {
     UpdatePlayerHealthBarColor = UpdatePlayerHealthBarColor,
     UpdatePlayerClassPortrait = UpdatePlayerClassPortrait
 }
-

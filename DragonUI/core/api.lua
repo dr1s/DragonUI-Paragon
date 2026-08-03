@@ -10,8 +10,8 @@ These are general-purpose functions that can be used by any module.
 local addon = select(2, ...)
 local L = addon.L
 
-addon.DB_SCHEMA_VERSION = 1
-addon.RELEASE_VERSION = GetAddOnMetadata("DragonUI", "Version") or "2.4.0"
+addon.DB_SCHEMA_VERSION = 2
+addon.RELEASE_VERSION = GetAddOnMetadata("DragonUI", "Version") or "2.5"
 
 -- ============================================================================
 -- TABLE UTILITIES
@@ -321,9 +321,6 @@ function addon.CreateUIFrame(width, height, frameName)
     return frame
 end
 
--- Global function alias for backwards compatibility
-CreateUIFrame = addon.CreateUIFrame
-
 -- Export nineslice functions for modules with custom behavior
 addon.AddNineslice = AddNineslice
 addon.SetNinesliceState = SetNinesliceState
@@ -359,9 +356,6 @@ function addon.ShowUIFrame(frame)
     end
 end
 
--- Global function alias for backwards compatibility
-ShowUIFrame = addon.ShowUIFrame
-
 -- Hide a UI frame (enable editor mode for this frame)
 function addon.HideUIFrame(frame, exclude)
     frame:SetMovable(true)
@@ -388,9 +382,6 @@ function addon.HideUIFrame(frame, exclude)
         table.insert(addon.frames[frame], target)
     end
 end
-
--- Global function alias for backwards compatibility
-HideUIFrame = addon.HideUIFrame
 
 -- ============================================================================
 -- POSITION SAVE/LOAD FUNCTIONS
@@ -453,8 +444,34 @@ function addon.SaveUIFramePosition(frame, configPath1, configPath2)
     end
 end
 
--- Global function alias for backwards compatibility
-SaveUIFramePosition = addon.SaveUIFramePosition
+-- Apply a saved widgets.* position to a frame (position presets / reload helpers)
+function addon.ApplyWidgetPositionFromDB(widgetKey, frame)
+    if not widgetKey or not frame or not addon.db or not addon.db.profile or not addon.db.profile.widgets then
+        return
+    end
+
+    local cfg = addon.db.profile.widgets[widgetKey]
+    if not cfg or (cfg.posX == nil and cfg.posY == nil) then
+        return
+    end
+
+    local anchor = cfg.anchor or "CENTER"
+    local posX = cfg.posX or 0
+    local posY = cfg.posY or 0
+
+    if addon._dualBarOffsetWidgets and addon._dualBarOffsetWidgets[widgetKey]
+       and addon.GetDualBarVerticalOffset and addon.IsWidgetAtDefaultPosition
+       and addon.IsWidgetAtDefaultPosition(widgetKey) then
+        posY = posY + addon.GetDualBarVerticalOffset()
+    end
+
+    if InCombatLockdown() then
+        return
+    end
+
+    frame:ClearAllPoints()
+    frame:SetPoint(anchor, UIParent, anchor, posX, posY)
+end
 
 -- Apply frame position from database
 function addon.ApplyUIFramePosition(frame, configPath)
@@ -475,9 +492,6 @@ function addon.ApplyUIFramePosition(frame, configPath)
     frame:ClearAllPoints()
     frame:SetPoint(config.anchor or "CENTER", UIParent, config.anchorParent or "CENTER", config.x or 0, config.y or 0)
 end
-
--- Global function alias for backwards compatibility
-ApplyUIFramePosition = addon.ApplyUIFramePosition
 
 -- ============================================================================
 -- SETTINGS VALIDATION
@@ -506,9 +520,6 @@ function addon.CheckSettingsExists(moduleTable, configPaths)
     end
 end
 
--- Global function alias for backwards compatibility
-CheckSettingsExists = addon.CheckSettingsExists
-
 -- ============================================================================
 -- EDITABLE FRAMES REGISTRY
 -- Centralized system for managing moveable UI elements
@@ -525,6 +536,7 @@ function addon:RegisterEditableFrame(frameInfo)
         configPath = frameInfo.configPath,        -- {"widgets", "player"} or {"unitframe", "target"}
         onShow = frameInfo.onShow,                -- Optional function when showing editor
         onHide = frameInfo.onHide,                -- Optional function when hiding editor
+        onNudge = frameInfo.onNudge,               -- Optional function after arrow-key/typed coordinate edits
         showTest = frameInfo.showTest,            -- Function to show with fake data
         hideTest = frameInfo.hideTest,            -- Function to hide fake frame
         hasTarget = frameInfo.hasTarget,          -- Function to check if should be visible
@@ -539,17 +551,28 @@ end
 -- EDITOR CONTROL PANEL (Real-time X/Y + Nudge Buttons)
 -- ============================================================================
 
+-- GetCenter() is in the frame's own scaled local space, not screen pixels, so a raw cx-ux breaks once scale != 1.
+local function GetFrameOffsetFromUIParent(frame)
+    local cx, cy = frame:GetCenter()
+    local ux, uy = UIParent:GetCenter()
+    if not cx or not cy or not ux or not uy then return nil end
+    local frameScale = frame:GetEffectiveScale()
+    local uiScale = UIParent:GetEffectiveScale()
+    local x = (cx * frameScale - ux * uiScale) / frameScale
+    local y = (cy * frameScale - uy * uiScale) / frameScale
+    return x, y
+end
+
 -- Update the coordinate display with current frame position.
 -- Uses GetCenter() for screen-relative coords that always reflect the
 -- actual visual position (GetPoint offsets can be stale during StartMoving).
 -- Skips update while the user is actively typing in an EditBox.
 local function UpdateEditorPanelCoords()
     if not editorPanel or not selectedEditorFrame then return end
-    local cx, cy = selectedEditorFrame:GetCenter()
-    if cx and cy then
-        local ux, uy = UIParent:GetCenter()
-        local xStr = string.format("%.1f", cx - (ux or 0))
-        local yStr = string.format("%.1f", cy - (uy or 0))
+    local x, y = GetFrameOffsetFromUIParent(selectedEditorFrame)
+    if x and y then
+        local xStr = string.format("%.1f", x)
+        local yStr = string.format("%.1f", y)
         -- Only update text if the EditBox is not focused (user may be typing)
         if not editorPanel.xValue:HasFocus() then
             editorPanel.xValue:SetText(xStr)
@@ -582,6 +605,9 @@ local function ApplyTypedCoordinates()
                 else
                     addon.SaveUIFramePosition(frameData.frame, frameData.configPath[1])
                 end
+                if frameData.onNudge then
+                    frameData.onNudge()
+                end
                 break
             end
         end
@@ -595,12 +621,11 @@ end
 local function NudgeSelectedFrame(dx, dy)
     if not selectedEditorFrame then return end
 
-    local cx, cy = selectedEditorFrame:GetCenter()
-    local ux, uy = UIParent:GetCenter()
-    if not cx or not cy or not ux or not uy then return end
+    local relX, relY = GetFrameOffsetFromUIParent(selectedEditorFrame)
+    if not relX or not relY then return end
 
-    local relX = (cx - ux) + dx
-    local relY = (cy - uy) + dy
+    relX = relX + dx
+    relY = relY + dy
 
     selectedEditorFrame:ClearAllPoints()
     selectedEditorFrame:SetPoint("CENTER", UIParent, "CENTER", relX, relY)
@@ -614,6 +639,9 @@ local function NudgeSelectedFrame(dx, dy)
                     addon.SaveUIFramePosition(frameData.frame, frameData.configPath[1], frameData.configPath[2])
                 else
                     addon.SaveUIFramePosition(frameData.frame, frameData.configPath[1])
+                end
+                if frameData.onNudge then
+                    frameData.onNudge()
                 end
                 break
             end
@@ -695,6 +723,29 @@ local function GetDetachedResetActionForSelection()
                 if ResetDetachedUnitframeToProfileDefaults("fot") then
                     addon.TargetOfFocus.Refresh()
                 end
+            end, frameData
+        end
+    elseif frameName == "PetFrame" then
+        local cfg = addon.db.profile.unitframe and addon.db.profile.unitframe.pet
+        if cfg and cfg.override and addon.RefreshPetFrame then
+            return function()
+                if ResetDetachedUnitframeToProfileDefaults("pet") then
+                    addon.RefreshPetFrame()
+                end
+            end, frameData
+        end
+    elseif frameName == "Debuffs" then
+        local cfg = addon.db.profile.widgets and addon.db.profile.widgets.debuffs
+        if cfg and cfg.custom_position and addon.BuffFrameModule and addon.BuffFrameModule.ResetDebuffPosition then
+            return function()
+                addon.BuffFrameModule:ResetDebuffPosition()
+            end, frameData
+        end
+    elseif frameName == "buffs" then
+        local cfg = addon.db.profile.widgets and addon.db.profile.widgets.buffs
+        if cfg and cfg.custom_position and addon.BuffFrameModule and addon.BuffFrameModule.ResetBuffFramePosition then
+            return function()
+                addon.BuffFrameModule:ResetBuffFramePosition()
             end, frameData
         end
     end
@@ -1055,7 +1106,7 @@ local function CreateEditorControlPanel()
     local resetSelectedButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetSelectedButton:SetSize(160, 20)
     resetSelectedButton:SetPoint("BOTTOM", panel, "BOTTOM", 0, 6)
-    resetSelectedButton:SetText((addon.L and addon.L["Right-click to reset"]) or "Reset")
+    resetSelectedButton:SetText((addon.L and addon.L["Click to reset"]) or "Reset")
     resetSelectedButton:SetFrameLevel(panel:GetFrameLevel() + 5)
     StyleEditorPanelButton(resetSelectedButton)
     resetSelectedButton:SetScript("OnClick", function(self)
@@ -1307,9 +1358,9 @@ local MODULE_LIFECYCLE_OVERRIDES = {
         restore = "RestoreChatModsSystem",
         loadOnce = true,
     },
-    combuctor = {
-        apply = "ApplyCombuctorSystem",
-        restore = "RestoreCombuctorSystem",
+    bagster = {
+        apply = "ApplyBagsterSystem",
+        restore = "RestoreBagsterSystem",
         loadOnce = true,
     },
     cooldowns = { refresh = "RefreshCooldowns", loadOnce = true },
@@ -1322,6 +1373,12 @@ local MODULE_LIFECYCLE_OVERRIDES = {
     mainbars = { refresh = "RefreshMainbarsSystem", loadOnce = true },
     micromenu = { refresh = "RefreshMicromenuSystem", loadOnce = true },
     minimap = { refresh = "RefreshMinimapSystem", loadOnce = true },
+    nameplates = {
+        apply = "ApplyNameplatesSystem",
+        restore = "RestoreNameplatesSystem",
+        refresh = "RefreshNameplates",
+        loadOnce = true,
+    },
     multicast = { refresh = "RefreshMulticast", loadOnce = true },
     noop = { refresh = "RefreshNoopSystem", loadOnce = true },
     petbar = { refresh = "RefreshPetbarSystem", loadOnce = true },
@@ -1732,11 +1789,11 @@ function addon:RefreshRegisteredSystems()
 end
 
 -- ============================================================================
--- COMBAT QUEUE SYSTEM (ElvUI Pattern)
+-- COMBAT QUEUE SYSTEM
 -- ============================================================================
 -- Central system for deferring operations that cannot run during combat lockdown.
 -- Pattern: Check InCombatLockdown() -> if true, queue operation -> execute after combat
--- Reference: ElvUI ActionBars.lua PLAYER_REGEN_ENABLED handler
+-- Reference: common PLAYER_REGEN_ENABLED deferred-execution pattern
 
 addon.CombatQueue = addon.CombatQueue or {
     -- Pending operations table: { [id] = { func, args } }
@@ -1885,7 +1942,6 @@ end
 -- ============================================================================
 
 -- No-op function reusable across all modules (avoids multiple definitions)
-addon._noop = addon._noop or function() end
 
 -- Get module config from addon.db.profile.modules[moduleName]
 -- @param moduleName: string key matching database.lua modules table
@@ -1983,8 +2039,335 @@ function addon:ApplyDatabaseMigrations()
         ApplyMissingDefaults(self.defaults.profile, profile)
     end
 
+    -- Combuctor → Bagster rename. AceDB already rawset a default `bagster` table at :New, so we
+    -- can't gate on it being nil; the old `combuctor` table is the source of truth when present.
+    local modules = rawget(profile, "modules")
+    if modules then
+        local oldC = rawget(modules, "combuctor")
+        if oldC ~= nil then
+            if type(oldC) == "table" and type(rawget(modules, "bagster")) == "table" then
+                addon.DeepCopy(oldC, modules.bagster) -- user values win, defaults fill gaps
+            else
+                modules.bagster = oldC
+            end
+            modules.combuctor = nil
+        end
+    end
+
+    -- Extra bar slots moved to db.char; drop the profile-wide leftovers so alts stop inheriting them.
+    local additional = rawget(profile, "additional")
+    local extrabar1 = additional and rawget(additional, "extrabar1")
+    if extrabar1 then
+        extrabar1.slots = nil
+    end
+
+    local global = self.db.global
+    if global then
+        local oldCache = rawget(global, "combuctorCache")
+        if oldCache ~= nil then
+            if type(oldCache) == "table" and type(rawget(global, "bagsterCache")) == "table" then
+                addon.DeepCopy(oldCache, global.bagsterCache)
+            else
+                global.bagsterCache = oldCache
+            end
+            global.combuctorCache = nil
+        end
+    end
+
     profile.version = self.DB_SCHEMA_VERSION
     self.db.version = self.DB_SCHEMA_VERSION
+end
+
+-- ============================================================================
+-- BAG ITEM USABILITY TINT
+-- ============================================================================
+-- Tooltip red misses armor/weapon proficiency in 3.3.5a; class tables cover that.
+-- Tint equippable gear only (not Use: stacks like essences via IsUsableItem).
+
+local unusableTintCache = {}
+local armorSubs
+local weaponSubs
+local scanTip, scanTipName
+
+-- true = always; number = min level (WotLK trainer unlock).
+local CLASS_ARMOR = {
+    MAGE = { cloth = true },
+    PRIEST = { cloth = true },
+    WARLOCK = { cloth = true },
+    ROGUE = { cloth = true, leather = true },
+    DRUID = { cloth = true, leather = true },
+    HUNTER = { cloth = true, leather = true, mail = 40 },
+    SHAMAN = { cloth = true, leather = true, mail = 40 },
+    WARRIOR = { cloth = true, leather = true, mail = 40, plate = 40 },
+    PALADIN = { cloth = true, leather = true, mail = true, plate = 40 },
+    DEATHKNIGHT = { cloth = true, leather = true, mail = true, plate = true },
+}
+
+local CLASS_SHIELD = { WARRIOR = true, PALADIN = true, SHAMAN = true }
+
+-- WotLK trainable weapon types per class (GetAuctionItemSubClasses(1) keys).
+local CLASS_WEAPONS = {
+    MAGE = { dagger = true, staff = true, sword1h = true, wand = true },
+    PRIEST = { dagger = true, mace1h = true, staff = true, wand = true },
+    WARLOCK = { dagger = true, staff = true, sword1h = true, wand = true },
+    ROGUE = {
+        bow = true, crossbow = true, dagger = true, fist = true, gun = true,
+        mace1h = true, sword1h = true, thrown = true,
+    },
+    DRUID = {
+        dagger = true, fist = true, mace1h = true, mace2h = true,
+        staff = true, polearm = true,
+    },
+    HUNTER = {
+        bow = true, crossbow = true, gun = true, dagger = true, fist = true,
+        axe1h = true, axe2h = true, sword1h = true, sword2h = true,
+        polearm = true, staff = true, thrown = true,
+    },
+    SHAMAN = {
+        axe1h = true, axe2h = true, mace1h = true, mace2h = true,
+        staff = true, dagger = true, fist = true,
+    },
+    WARRIOR = {
+        axe1h = true, axe2h = true, bow = true, gun = true, mace1h = true,
+        mace2h = true, polearm = true, sword1h = true, sword2h = true,
+        staff = true, fist = true, dagger = true, thrown = true, crossbow = true,
+    },
+    PALADIN = {
+        axe1h = true, axe2h = true, mace1h = true, mace2h = true,
+        sword1h = true, sword2h = true, polearm = true,
+    },
+    DEATHKNIGHT = {
+        axe1h = true, axe2h = true, mace1h = true, mace2h = true,
+        sword1h = true, sword2h = true, polearm = true,
+    },
+}
+
+local ARMOR_SLOTS = {
+    INVTYPE_HEAD = true, INVTYPE_SHOULDER = true, INVTYPE_CHEST = true,
+    INVTYPE_ROBE = true, INVTYPE_WAIST = true, INVTYPE_LEGS = true,
+    INVTYPE_FEET = true, INVTYPE_WRIST = true, INVTYPE_HAND = true,
+}
+
+local WEAPON_SLOTS = {
+    INVTYPE_WEAPON = true, INVTYPE_WEAPONMAINHAND = true,
+    INVTYPE_WEAPONOFFHAND = true, INVTYPE_2HWEAPON = true,
+    INVTYPE_RANGED = true, INVTYPE_THROWN = true, INVTYPE_RANGEDRIGHT = true,
+}
+
+-- Every equippable slot: proficiency tables cover armor/weapons, tooltip red covers the rest.
+local EQUIPPABLE_SLOTS = {
+    INVTYPE_NECK = true, INVTYPE_FINGER = true, INVTYPE_TRINKET = true,
+    INVTYPE_CLOAK = true, INVTYPE_BODY = true, INVTYPE_TABARD = true,
+    INVTYPE_SHIELD = true, INVTYPE_HOLDABLE = true, INVTYPE_RELIC = true,
+    INVTYPE_AMMO = true, INVTYPE_QUIVER = true,
+}
+for slot in pairs(ARMOR_SLOTS) do EQUIPPABLE_SLOTS[slot] = true end
+for slot in pairs(WEAPON_SLOTS) do EQUIPPABLE_SLOTS[slot] = true end
+
+local function GetArmorSubs()
+    if armorSubs then return armorSubs end
+    local _, cloth, leather, mail, plate, shields = GetAuctionItemSubClasses(2)
+    armorSubs = { cloth = cloth, leather = leather, mail = mail, plate = plate, shields = shields }
+    return armorSubs
+end
+
+-- Order: 1H/2H Axes, Bows, Guns, 1H/2H Maces, Polearms, 1H/2H Swords, Staves,
+-- Fist, Misc, Daggers, Thrown, Crossbows, Wands, Fishing Poles.
+local function GetWeaponSubs()
+    if weaponSubs then return weaponSubs end
+    local axe1h, axe2h, bow, gun, mace1h, mace2h, polearm, sword1h, sword2h,
+        staff, fist, misc, dagger, thrown, crossbow, wand, fishing =
+        GetAuctionItemSubClasses(1)
+    weaponSubs = {
+        axe1h = axe1h, axe2h = axe2h, bow = bow, gun = gun,
+        mace1h = mace1h, mace2h = mace2h, polearm = polearm,
+        sword1h = sword1h, sword2h = sword2h, staff = staff, fist = fist,
+        misc = misc, dagger = dagger, thrown = thrown, crossbow = crossbow,
+        wand = wand, fishing = fishing,
+    }
+    return weaponSubs
+end
+
+local function GetWeaponKey(subType)
+    local s = GetWeaponSubs()
+    if subType == s.axe1h then return "axe1h"
+    elseif subType == s.axe2h then return "axe2h"
+    elseif subType == s.bow then return "bow"
+    elseif subType == s.gun then return "gun"
+    elseif subType == s.mace1h then return "mace1h"
+    elseif subType == s.mace2h then return "mace2h"
+    elseif subType == s.polearm then return "polearm"
+    elseif subType == s.sword1h then return "sword1h"
+    elseif subType == s.sword2h then return "sword2h"
+    elseif subType == s.staff then return "staff"
+    elseif subType == s.fist then return "fist"
+    elseif subType == s.dagger then return "dagger"
+    elseif subType == s.thrown then return "thrown"
+    elseif subType == s.crossbow then return "crossbow"
+    elseif subType == s.wand then return "wand"
+    elseif subType == s.fishing then return "fishing"
+    elseif subType == s.misc then return "misc"
+    end
+    return nil
+end
+
+local function IsWrongArmorOrShield(link)
+    local name, _, _, _, _, itemType, subType, _, equipLoc = GetItemInfo(link)
+    if not name or not subType or not equipLoc then return nil end
+    local _, classFile = UnitClass("player")
+    if not classFile then return false end
+    local subs = GetArmorSubs()
+
+    if equipLoc == "INVTYPE_SHIELD" then
+        return not CLASS_SHIELD[classFile]
+    end
+    if not ARMOR_SLOTS[equipLoc] then return false end
+    if itemType ~= select(2, GetAuctionItemClasses()) then return false end
+
+    local key = (subType == subs.cloth and "cloth")
+        or (subType == subs.leather and "leather")
+        or (subType == subs.mail and "mail")
+        or (subType == subs.plate and "plate")
+    if not key then return false end
+
+    local req = CLASS_ARMOR[classFile] and CLASS_ARMOR[classFile][key]
+    if not req then return true end
+    return type(req) == "number" and UnitLevel("player") < req
+end
+
+local function IsWrongWeapon(link)
+    local name, _, _, _, _, itemType, subType, _, equipLoc = GetItemInfo(link)
+    if not name or not subType or not equipLoc then return nil end
+    if not WEAPON_SLOTS[equipLoc] then return false end
+    if itemType ~= select(1, GetAuctionItemClasses()) then return false end
+
+    local key = GetWeaponKey(subType)
+    if not key or key == "misc" or key == "fishing" then return false end
+
+    local _, classFile = UnitClass("player")
+    if not classFile then return false end
+    return not (CLASS_WEAPONS[classFile] and CLASS_WEAPONS[classFile][key])
+end
+
+-- Equippable leftovers only (class/race/faction). Returns nil if tooltip empty (uncached).
+local function EquippableHasRedRequirement(link, bag, slot)
+    if not scanTip then
+        scanTip = CreateFrame("GameTooltip", "DragonUIUnusableScanTip", nil, "GameTooltipTemplate")
+        scanTipName = scanTip:GetName()
+    end
+    scanTip:SetOwner(UIParent, "ANCHOR_NONE")
+    scanTip:ClearLines()
+    if bag ~= nil and slot ~= nil then
+        scanTip:SetBagItem(bag, slot)
+    else
+        scanTip:SetHyperlink(link)
+    end
+    local numLines = scanTip:NumLines() or 0
+    if numLines < 2 then
+        scanTip:Hide()
+        return nil
+    end
+    local redCode = RED_FONT_COLOR_CODE or "|cffff2020"
+    for i = 2, numLines do
+        local fs = _G[scanTipName .. "TextLeft" .. i]
+        if fs then
+            local text = fs:GetText()
+            if text and text:find(redCode, 1, true) then
+                scanTip:Hide()
+                return true
+            end
+            local r, g, b = fs:GetTextColor()
+            if r and r > 0.9 and g < 0.2 and b < 0.2 then
+                scanTip:Hide()
+                return true
+            end
+        end
+    end
+    scanTip:Hide()
+    return false
+end
+
+function addon:IsUnusableItemTintEnabled()
+    local bags = self.db and self.db.profile and self.db.profile.bags
+    return bags and bags.tint_unusable and true or false
+end
+
+function addon:ClearUnusableItemTintCache()
+    wipe(unusableTintCache)
+end
+
+function addon:IsItemUnusableForTint(link, bag, slot)
+    if not link then return false end
+    local itemID = link:match("item:(%d+)")
+    if itemID and unusableTintCache[itemID] ~= nil then
+        return unusableTintCache[itemID]
+    end
+
+    local unusable = false
+    local cacheable = true
+    local wrongArmor = IsWrongArmorOrShield(link)
+    local wrongWeapon = false
+    if wrongArmor ~= true then
+        wrongWeapon = IsWrongWeapon(link)
+    end
+    if wrongArmor == nil or wrongWeapon == nil then
+        cacheable = false
+        unusable = false
+    elseif wrongArmor or wrongWeapon then
+        unusable = true
+    else
+        -- Gear slots only — not consumables.
+        local _, _, _, _, reqLevel, _, _, _, equipLoc = GetItemInfo(link)
+        if equipLoc and EQUIPPABLE_SLOTS[equipLoc] then
+            if reqLevel and reqLevel > UnitLevel("player") then
+                unusable = true
+            else
+                local red = EquippableHasRedRequirement(link, bag, slot)
+                if red == nil then
+                    cacheable = false
+                    unusable = false
+                else
+                    unusable = red
+                end
+            end
+        end
+    end
+
+    if itemID and cacheable then
+        unusableTintCache[itemID] = unusable
+    end
+    return unusable
+end
+
+function addon:RefreshUnusableItemTints()
+    wipe(unusableTintCache)
+    for i = 1, (NUM_CONTAINER_FRAMES or 13) do
+        local frame = _G["ContainerFrame" .. i]
+        if frame and frame:IsShown() and ContainerFrame_Update then
+            ContainerFrame_Update(frame)
+        end
+    end
+    if BankFrame and BankFrame:IsShown() and BankFrameItemButton_Update then
+        for i = 1, 28 do
+            local button = _G["BankFrameItem" .. i]
+            if button then BankFrameItemButton_Update(button) end
+        end
+    end
+    -- addon.BagsterModule.frames = inventory/bank frames only (not RegisterModule.frames).
+    local frames = self.BagsterModule and self.BagsterModule.frames
+    if frames then
+        for i = 1, 2 do
+            local frame = frames[i]
+            local items = frame and frame.itemFrame and frame.itemFrame.items
+            if items then
+                for _, item in pairs(items) do
+                    if item.UpdateSlotColor then
+                        item:UpdateSlotColor()
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- ============================================================================

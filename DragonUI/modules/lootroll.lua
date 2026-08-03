@@ -57,6 +57,7 @@ end
 --- Falls back to repositioning individual GroupLootFrame1-4 if the
 --- container global doesn't exist on this client.
 local attachingContainer = false  -- re-entrancy guard
+local fallbackHooksInstalled = false
 
 local function AttachContainer()
     local anchor = LootRollModule.anchorFrame
@@ -73,6 +74,7 @@ local function AttachContainer()
         attachingContainer = false
     else
         -- Fallback: reposition individual frames (older clients without container)
+        attachingContainer = true
         for i = 1, NUM_GROUP_LOOT_FRAMES or 4 do
             local frame = _G["GroupLootFrame" .. i]
             if frame then
@@ -85,6 +87,7 @@ local function AttachContainer()
                 end
             end
         end
+        attachingContainer = false
     end
 end
 
@@ -119,6 +122,22 @@ local function InstallHooks()
             if not LootRollModule.applied then return end
             AttachContainer()
         end)
+    end
+
+    -- Fallback: also self-correct each frame directly, so a reposition while
+    -- a roll is already open (not just on new-frame-open) gets caught too.
+    if not GroupLootContainer and not fallbackHooksInstalled then
+        fallbackHooksInstalled = true
+        for i = 1, NUM_GROUP_LOOT_FRAMES or 4 do
+            local frame = _G["GroupLootFrame" .. i]
+            if frame then
+                hooksecurefunc(frame, "SetPoint", function()
+                    if not LootRollModule.applied then return end
+                    if attachingContainer then return end
+                    AttachContainer()
+                end)
+            end
+        end
     end
 
     hookInstalled = true
@@ -189,14 +208,25 @@ end
 -- APPLY / RESTORE
 -- =============================================================================
 function LootRollModule:ApplySystem()
-    if self.applied then return end
     if not self.initialized then
         self:Initialize()
         return
     end
+
     UpdateAnchorPosition()
     AttachContainer()
     self.applied = true
+end
+
+-- Public refresh helper used by position presets and profile operations.
+function addon.RefreshLootRoll()
+    if not LootRollModule.initialized then
+        LootRollModule:Initialize()
+        return
+    end
+
+    UpdateAnchorPosition()
+    AttachContainer()
 end
 
 function LootRollModule:RestoreSystem()
@@ -342,12 +372,3 @@ addon.package:RegisterEvents(function()
     end
 end, "PLAYER_ENTERING_WORLD")
 
--- Profile change handler
-if addon.core and addon.core.RegisterMessage then
-    addon.core.RegisterMessage(addon, "DRAGONUI_PROFILE_CHANGED", function()
-        if LootRollModule.initialized then
-            UpdateAnchorPosition()
-            AttachContainer()
-        end
-    end)
-end

@@ -76,7 +76,7 @@ local function BuildChatTab(scroll)
             none     = LO["None"],
             dark     = LO["Dark"],
             dragon   = LO["DragonUI Style"],
-            midnight = LO["Midnight"],
+            midnight = LO["Nocturne"],
         },
         dbPath = "modules.chatmods.chatStyle",
         callback = function()
@@ -93,9 +93,20 @@ local function BuildChatTab(scroll)
             none     = LO["None"],
             dark     = LO["Dark"],
             dragon   = LO["DragonUI Style"],
-            midnight = LO["Midnight"],
+            midnight = LO["Nocturne"],
         },
         dbPath = "modules.chatmods.editboxStyle",
+        callback = function()
+            if addon.ApplyEditboxStyle then
+                addon.ApplyEditboxStyle()
+            end
+        end,
+    })
+
+    C:AddToggle(appearanceSection, {
+        label = LO["Vanilla Editbox"],
+        desc  = LO["Use the default chat input appearance."],
+        dbPath = "modules.chatmods.vanillaEditbox",
         callback = function()
             if addon.ApplyEditboxStyle then
                 addon.ApplyEditboxStyle()

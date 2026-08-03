@@ -62,6 +62,16 @@ local function BuildAdditionalBarsTab(scroll)
         end,
     })
 
+    C:AddHeading(stance, LO["Visibility"])
+    C:AddVisibilityFadeToggles(stance, {
+        dbPrefix = "additional.stance",
+        hoverDesc = LO["Fade the stance bar until you hover over it."],
+        combatDesc = LO["Fade the stance bar until you enter combat."],
+        callback = function()
+            if addon.RefreshStance then addon.RefreshStance() end
+        end,
+    })
+
     -- ====================================================================
     -- PET BAR
     -- ====================================================================
@@ -78,6 +88,25 @@ local function BuildAdditionalBarsTab(scroll)
         dbPath = "additional.pet.scale",
         min = 0.5, max = 2.0, step = 0.05,
         width = 200,
+        callback = function()
+            if addon.RefreshPetbarFrame then addon.RefreshPetbarFrame() end
+        end,
+    })
+
+    C:AddToggle(pet, {
+        label = LO["Show Empty Slots"],
+        desc = LO["Show the button frame on pet slots with no ability assigned."],
+        dbPath = "additional.pet.grid",
+        callback = function()
+            if addon.RefreshPetbarGrid then addon.RefreshPetbarGrid() end
+        end,
+    })
+
+    C:AddHeading(pet, LO["Visibility"])
+    C:AddVisibilityFadeToggles(pet, {
+        dbPrefix = "additional.pet",
+        hoverDesc = LO["Fade the pet bar until you hover over it."],
+        combatDesc = LO["Fade the pet bar until you enter combat."],
         callback = function()
             if addon.RefreshPetbarFrame then addon.RefreshPetbarFrame() end
         end,
@@ -141,6 +170,17 @@ local function BuildAdditionalBarsTab(scroll)
         min = 0, max = 20, step = 1,
         width = 200,
     })
+
+    C:AddHeading(totem, LO["Visibility"])
+    C:AddVisibilityFadeToggles(totem, {
+        dbPrefix = "additional.totem",
+        hoverDesc = LO["Fade the totem bar until you hover over it."],
+        combatDesc = LO["Fade the totem bar until you enter combat."],
+        callback = function()
+            if addon.RefreshMulticast then addon.RefreshMulticast(true) end
+        end,
+    })
+    -- Extra Bar (#330) is under Action Bars — general-purpose, not class-conditional like the bars above.
 end
 
 -- Register the tab (order 4 = right after Action Bars)

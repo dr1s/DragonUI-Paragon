@@ -7,7 +7,7 @@
 
   Architecture:
   - Config: addon.db.profile.unitframe.boss
-  - Atlas: SetAtlasTexture (global from Atlas.lua)
+  - Atlas: texture:set_atlas(name, true) (from utils/atlas.lua)
   - Editor: RegisterEditableFrame for drag positioning
   - Visibility: RegisterUnitWatch(bossFrame) per boss frame — required because
     INSTANCE_ENCOUNTER_ENGAGE_UNIT does NOT exist in 3.3.5a (MCP Ch.25).
@@ -44,6 +44,7 @@ local NUM_BOSS_FRAMES = 4
 
 local BossModule = UF.CreateModule("boss")
 BossModule.wrapperFrames = {} -- editor wrapper frames indexed 1-4
+BossModule.secureAnchors = {}
 BossModule.configured = false
 
 if addon.RegisterModule then
@@ -69,6 +70,19 @@ local CLASSIFICATION_ATLAS = {
 }
 local DEFAULT_BOSS_ATLAS = "TargetFrame-TextureFrame-Elite"
 
+-- Blizzard can re-anchor TextureFrame back to its default screen position; lock it.
+local function HookTextureFrameSetPoint(textureFrame, bossFrame)
+    if textureFrame.__DragonUI_SetPointHooked then return end
+    hooksecurefunc(textureFrame, "SetPoint", function(self, ...)
+        if self._DragonUI_SettingPoint or InCombatLockdown() then return end
+        self._DragonUI_SettingPoint = true
+        self:ClearAllPoints()
+        self:SetPoint("TOPLEFT", bossFrame, "TOPLEFT", 0, 0)
+        self._DragonUI_SettingPoint = nil
+    end)
+    textureFrame.__DragonUI_SetPointHooked = true
+end
+
 -- Re-anchor border (called from hooks after Blizzard resets)
 local function UpdateBossFrameBorder(bossFrame)
     if not bossFrame.DragonUI_FrameBorder or not bossFrame.DragonUI_FrameBG then return end
@@ -87,7 +101,12 @@ local function UpdateBossFrameBorder(bossFrame)
     if frameName then
         local textureFrame = _G[frameName .. "TextureFrame"]
         if textureFrame and borderFrame then
+            textureFrame._DragonUI_SettingPoint = true
+            textureFrame:ClearAllPoints()
+            textureFrame:SetPoint("TOPLEFT", bossFrame, "TOPLEFT", 0, 0)
+            textureFrame._DragonUI_SettingPoint = nil
             textureFrame:SetFrameLevel(borderFrame:GetFrameLevel() + 2)
+            HookTextureFrameSetPoint(textureFrame, bossFrame)
         end
     end
     -- Decoration frame (child of borderFrame) always renders above border
@@ -144,15 +163,36 @@ end
 -- (TargetFrame_Update, XML anchors, UIParent_ManageFramePositions) that we
 -- can't catch with just TargetFrame_Update hooks.
 
+local function CreateSecureBossAnchor(wrapper, bossFrame, bossIndex)
+    local anchor = CreateFrame("Frame", nil, wrapper, "SecureHandlerStateTemplate")
+    anchor:SetAllPoints(wrapper)
+    anchor:SetFrameRef("bossFrame", bossFrame)
+    anchor:SetAttribute("unit", "boss" .. bossIndex)
+    anchor:SetAttribute("_onstate-unitexists", [[
+        if newstate then
+            local bossFrame = self:GetFrameRef("bossFrame")
+            if bossFrame then
+                bossFrame:ClearAllPoints()
+                bossFrame:SetPoint("TOPLEFT", self, "TOPLEFT", 0, 0)
+            end
+            -- Clear the cache so later Blizzard reanchors are repaired on the next unit-watch pass.
+            self:SetAttribute("state-unitexists", nil)
+        end
+    ]])
+    RegisterUnitWatch(anchor, true)
+    BossModule.secureAnchors[bossIndex] = anchor
+    return anchor
+end
+
 local function HookBossFrameSetPoint(bossFrame, bossIndex)
     if bossFrame.__DragonUI_SetPointHooked then return end
     hooksecurefunc(bossFrame, "SetPoint", function(self, ...)
-        if self._DragonUI_SettingPoint then return end
-        local w = BossModule.wrapperFrames[bossIndex]
-        if not w then return end
+        if self._DragonUI_SettingPoint or InCombatLockdown() then return end
+        local anchor = BossModule.secureAnchors[bossIndex] or BossModule.wrapperFrames[bossIndex]
+        if not anchor then return end
         self._DragonUI_SettingPoint = true
         self:ClearAllPoints()
-        self:SetPoint("TOPLEFT", w, "TOPLEFT", 0, 0)
+        self:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
         self._DragonUI_SettingPoint = nil
     end)
     bossFrame.__DragonUI_SetPointHooked = true
@@ -162,11 +202,12 @@ end
 -- RESKIN BLIZZARD BOSS FRAME
 -- ============================================================================
 
-local function ReskinBossFrame(wrapperFrame, bossFrame)
+local function ReskinBossFrame(wrapperFrame, bossFrame, bossIndex)
     -- Anchor the Blizzard boss frame to our wrapper
+    local positionAnchor = BossModule.secureAnchors[bossIndex] or wrapperFrame
     bossFrame._DragonUI_SettingPoint = true
     bossFrame:ClearAllPoints()
-    bossFrame:SetPoint("TOPLEFT", wrapperFrame, "TOPLEFT", 0, 0)
+    bossFrame:SetPoint("TOPLEFT", positionAnchor, "TOPLEFT", 0, 0)
     bossFrame:SetHitRectInsets(0, 0, 0, 0)
     bossFrame._DragonUI_SettingPoint = nil
 
@@ -399,7 +440,7 @@ local function ReskinBossFrame(wrapperFrame, bossFrame)
     if highLevelTex and levelText then
         highLevelTex:ClearAllPoints()
         highLevelTex:SetPoint("CENTER", levelText, "CENTER", -9, 6)
-        SetAtlasTexture(highLevelTex, "TargetFrame-HighLevelIcon")
+        highLevelTex:set_atlas("TargetFrame-HighLevelIcon", true)
     end
 
     -- Health text
@@ -453,7 +494,7 @@ local function ReskinBossFrame(wrapperFrame, bossFrame)
         if not raidTargetIcon.__DragonUI_SetPointHooked then
             local iconPortrait = portrait
             hooksecurefunc(raidTargetIcon, "SetPoint", function(self, ...)
-                if self._DragonUI_SettingPoint then return end
+                if self._DragonUI_SettingPoint or InCombatLockdown() then return end
                 self._DragonUI_SettingPoint = true
                 self:ClearAllPoints()
                 self:SetPoint("CENTER", iconPortrait, "TOP", 0, 5)
@@ -488,7 +529,7 @@ local function ReskinBossFrame(wrapperFrame, bossFrame)
     if bossFrame.threatIndicator then
         bossFrame.threatIndicator:ClearAllPoints()
         bossFrame.threatIndicator:SetPoint("BOTTOMLEFT", 0, 0)
-        SetAtlasTexture(bossFrame.threatIndicator, "TargetFrame-Status")
+        bossFrame.threatIndicator:set_atlas("TargetFrame-Status", true)
     end
 
     -- Apply classification-based atlas border
@@ -581,17 +622,31 @@ local function HookClassification()
         -- Only process boss frames
         local frameName = self:GetName()
         if not frameName or not frameName:match("^Boss%dTargetFrame$") then return end
+        if InCombatLockdown() then return end
 
         -- Hide Blizzard border (we use our own custom textures)
         local blizzBorder = _G[frameName .. "TextureFrameTexture"]
         if blizzBorder then blizzBorder:SetAlpha(0) end
 
-        -- Re-apply bar sizing
+        -- Re-apply bar size and anchor — Blizzard also re-anchors these here.
+        local portrait = _G[frameName .. "Portrait"]
         local healthBar = _G[frameName .. "HealthBar"]
-        if healthBar then healthBar:SetSize(125, 20) end
+        if healthBar then
+            healthBar:SetSize(125, 20)
+            if portrait then
+                healthBar:ClearAllPoints()
+                healthBar:SetPoint("RIGHT", portrait, "LEFT", -1, 0)
+            end
+        end
 
         local manaBar = _G[frameName .. "ManaBar"]
-        if manaBar then manaBar:SetSize(132, 9) end
+        if manaBar then
+            manaBar:SetSize(132, 9)
+            if portrait then
+                manaBar:ClearAllPoints()
+                manaBar:SetPoint("RIGHT", portrait, "LEFT", 6.5, -16.5)
+            end
+        end
 
         local nameText = _G[frameName .. "TextureFrameName"]
         if nameText then
@@ -681,6 +736,7 @@ local function HookHealthBarColor()
         if not statusbar or statusbar.lockValues then return end
         if not unit or not unit:match("^boss%d$") then return end
         if unit ~= statusbar.unit then return end
+        if InCombatLockdown() then return end
 
         -- Re-enforce bar sizing — Blizzard can reset during combat
         statusbar:SetSize(125, 20)
@@ -711,14 +767,15 @@ local function HookTargetFrameUpdate()
 
         -- Find which wrapper this boss frame belongs to
         local bossIdx = tonumber(frameName:match("Boss(%d)TargetFrame"))
-        local wrapper = bossIdx and BossModule.wrapperFrames[bossIdx]
-        if wrapper then
+        local positionAnchor = bossIdx and
+            (BossModule.secureAnchors[bossIdx] or BossModule.wrapperFrames[bossIdx])
+        if positionAnchor then
             -- Re-anchor boss frame to our wrapper — Blizzard's TargetFrame_Update
             -- repositions frames to their default location during combat.
             -- (SetPoint hook also enforces this, but we double-check here.)
             self._DragonUI_SettingPoint = true
             self:ClearAllPoints()
-            self:SetPoint("TOPLEFT", wrapper, "TOPLEFT", 0, 0)
+            self:SetPoint("TOPLEFT", positionAnchor, "TOPLEFT", 0, 0)
             self:SetHitRectInsets(0, 0, 0, 0)
             self._DragonUI_SettingPoint = nil
         end
@@ -902,6 +959,7 @@ local function InitializeBossFrames()
             -- Create wrapper frame for positioning
             local wrapper = addon.CreateUIFrame(200, 75, "Boss" .. i .. "Frame")
             BossModule.wrapperFrames[i] = wrapper
+            CreateSecureBossAnchor(wrapper, bossFrame, i)
 
             -- Ensure the unit attribute is set so RegisterUnitWatch knows
             -- which unit token to track (INSTANCE_ENCOUNTER_ENGAGE_UNIT
@@ -915,21 +973,31 @@ local function InitializeBossFrames()
             -- DragonflightUI Bossframe.mixin.lua uses the same pattern.
             RegisterUnitWatch(bossFrame)
 
+            -- Alpha-only fade layered on top of RegisterUnitWatch's own Show/Hide.
+            if addon.VisibilityFade then
+                addon.VisibilityFade.Register("boss" .. i, bossFrame, {
+                    dbTable = function() return addon.UF.GetConfig("boss") end,
+                    clickThrough = true,
+                })
+            end
+
             -- Hook SetPoint to block ALL Blizzard repositioning
             HookBossFrameSetPoint(bossFrame, i)
 
             -- Reskin the Blizzard boss frame
-            ReskinBossFrame(wrapper, bossFrame)
+            ReskinBossFrame(wrapper, bossFrame, i)
 
             -- Hook OnShow to refresh visuals when boss appears
             if not bossFrame.__DragonUI_OnShowHooked then
                 bossFrame:HookScript("OnShow", function(self)
+                    if addon.VisibilityFade then addon.VisibilityFade.Update("boss" .. i) end
                     -- Re-hide Blizzard elements
                     local fn = self:GetName()
                     local bg = _G[fn .. "Background"]
                     if bg then bg:SetAlpha(0) end
                     local blizzBorder = _G[fn .. "TextureFrameTexture"]
                     if blizzBorder then blizzBorder:SetAlpha(0) end
+                    if InCombatLockdown() then return end
                     -- Update border textures
                     UpdateBossFrameBorder(self)
                     -- Refresh portrait
@@ -1228,7 +1296,7 @@ function addon.RefreshBossFrames()
         local bossFrame = _G["Boss" .. i .. "TargetFrame"]
         local wrapper = BossModule.wrapperFrames[i]
         if bossFrame and wrapper then
-            ReskinBossFrame(wrapper, bossFrame)
+            ReskinBossFrame(wrapper, bossFrame, i)
         end
     end
 

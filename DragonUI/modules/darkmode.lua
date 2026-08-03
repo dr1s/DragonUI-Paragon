@@ -107,12 +107,18 @@ end
 
 local function DarkenTexture(texture, tint)
     if not texture then return end
+    local pr, pg, pb, pa = texture:GetVertexColor()
     if not texture.__DragonUI_OrigColor then
-        texture.__DragonUI_OrigColor = { texture:GetVertexColor() }
+        texture.__DragonUI_OrigColor = { pr, pg, pb, pa }
     end
+    -- SetVertexColor(r,g,b) resets alpha to 1 and undoes hide_main_bar_background on gryphons.
+    local keepAlpha = texture.GetAlpha and texture:GetAlpha() or 1
     texture.__DragonUI_SettingDark = true
-    texture:SetVertexColor(tint[1], tint[2], tint[3])
+    texture:SetVertexColor(tint[1], tint[2], tint[3], pa)
     texture.__DragonUI_SettingDark = nil
+    if texture.SetAlpha then
+        texture:SetAlpha(keepAlpha)
+    end
     DarkModeModule.darkenedTextures[texture] = true
 end
 
@@ -120,9 +126,13 @@ local function RestoreTexture(texture)
     if not texture then return end
     if texture.__DragonUI_OrigColor then
         local c = texture.__DragonUI_OrigColor
+        local keepAlpha = texture.GetAlpha and texture:GetAlpha() or 1
         texture.__DragonUI_SettingDark = true
         texture:SetVertexColor(c[1], c[2], c[3], c[4] or 1)
         texture.__DragonUI_SettingDark = nil
+        if texture.SetAlpha then
+            texture:SetAlpha(keepAlpha)
+        end
         texture.__DragonUI_OrigColor = nil
     end
     DarkModeModule.darkenedTextures[texture] = nil
@@ -154,6 +164,7 @@ local function DarkenActionButtonBorders(tint)
         "MultiBarRightButton",
         "MultiBarLeftButton",
         "BonusActionButton",
+        "DragonUI_ExtraBarButton",
     }
     for _, prefix in ipairs(prefixes) do
         for i = 1, 12 do
@@ -351,6 +362,29 @@ end
 -- UNIT FRAME BORDERS: darken ONLY the border/background textures,
 -- never the portrait or health/mana bar fill.
 -- -----------------------------------------------------------------------
+-- Party pet art lives two anonymous frames deep (PartyFrameTemplates.xml), so GetRegions() never reaches it.
+local function DarkenNestedPartyArt(frame, tint, depth)
+    if not frame or (depth or 0) > 3 then return end
+
+    if frame.GetRegions then
+        for _, region in ipairs({ frame:GetRegions() }) do
+            if region and region.GetObjectType and region:GetObjectType() == "Texture" then
+                local path = region.GetTexture and region:GetTexture()
+                -- Anchored match keeps the -Flash highlight variant out.
+                if type(path) == "string" and path:upper():find("UI%-PARTYFRAME$") then
+                    DarkenTexture(region, tint)
+                end
+            end
+        end
+    end
+
+    if frame.GetChildren then
+        for _, child in ipairs({ frame:GetChildren() }) do
+            DarkenNestedPartyArt(child, tint, (depth or 0) + 1)
+        end
+    end
+end
+
 local function DarkenUnitFrameBorders(tint)
     local nameBgTint = GetTargetFocusNameBackgroundTint(tint)
 
@@ -495,7 +529,9 @@ local function DarkenUnitFrameBorders(tint)
         if frame and frame.DragonUI_BorderFrame and frame.DragonUI_BorderFrame.texture then
             DarkenTexture(frame.DragonUI_BorderFrame.texture, tint)
         end
-        DarkenFrameBorderTextures(_G["PartyMemberFrame" .. i .. "PetFrame"])
+        local petFrame = _G["PartyMemberFrame" .. i .. "PetFrame"]
+        DarkenFrameBorderTextures(petFrame)
+        DarkenNestedPartyArt(petFrame, tint, 0)
     end
 end
 
@@ -596,7 +632,7 @@ local function DarkenBackpackCutout(tint)
     -- Create the cutout overlay once, reuse on subsequent calls
     if not backpack.__DragonUI_DarkCutout then
         local cutout = backpack:CreateTexture(nil, "ARTWORK", nil, 7)
-        cutout:SetTexture("Interface\\AddOns\\DragonUI\\assets\\bagslotCutout")
+        cutout:SetTexture("Interface\\AddOns\\DragonUI\\Textures\\Bags\\bagslotCutout")
         local bw, bh = backpack:GetWidth(), backpack:GetHeight()
         cutout:SetWidth(bw + 1)
         cutout:SetHeight(bh + 1)
@@ -668,6 +704,47 @@ local function DarkenAddonButtonBorders(tint)
 end
 
 -- -----------------------------------------------------------------------
+-- COMPACT RAID FRAME MANAGER (addon): manager shell + toggle button chrome
+-- -----------------------------------------------------------------------
+local COMPACT_RAIDFRAME_ADDONS = {
+    CompactRaidFrame = true,
+    CompactRaidFrames = true,
+    Blizzard_CompactRaidFrames = true,
+}
+
+local function DarkenFrameRootTextures(frame, tint, skipNormalTexture)
+    if not frame or not frame.GetRegions then return end
+    local normalTex = skipNormalTexture and frame.GetNormalTexture and frame:GetNormalTexture()
+    for _, region in ipairs({ frame:GetRegions() }) do
+        if region and region.GetObjectType and region:GetObjectType() == "Texture" and region ~= normalTex then
+            DarkenTexture(region, tint)
+        end
+    end
+end
+
+local function DarkenCompactRaidFrameManager(tint)
+    local manager = _G["CompactRaidFrameManager"]
+    if manager then
+        DarkenFrameRootTextures(manager, tint)
+    end
+
+    local toggle = _G["CompactRaidFrameManagerToggleButton"]
+        or (manager and manager.toggleButton)
+    if toggle then
+        DarkenFrameRootTextures(toggle, tint, true)
+        local normal = toggle.GetNormalTexture and toggle:GetNormalTexture()
+        if normal then
+            DarkenTexture(normal, tint)
+        end
+    end
+
+    local borderFrame = _G["CompactRaidFrameContainerBorderFrame"]
+    if borderFrame then
+        DarkenFrameRootTextures(borderFrame, tint)
+    end
+end
+
+-- -----------------------------------------------------------------------
 -- CASTBAR: darken border only
 local function DarkenCastbarBorders(tint)
     -- Blizzard CastingBarFrame
@@ -724,6 +801,12 @@ local function DarkenCastbarBorders(tint)
                 end
             end
         end
+        -- Same art as the action button NormalTexture, so it takes the same tint to stay in step.
+        local spellIcon = _G[name .. "Icon"]
+        if spellIcon and spellIcon.ModernBorder then
+            DarkenTexture(spellIcon.ModernBorder, tint)
+        end
+
         -- Darken the text background frame border
         local textBG = _G[name .. "TextBG"]
         if textBG and textBG.GetRegions then
@@ -769,10 +852,42 @@ end
 -- Forward declaration so ApplyDarkMode can reference RestoreDarkMode
 local RestoreDarkMode
 
-local function ApplyDarkMode()
+-- White aura mask reads lighter than action-bar chrome at the same vertex color; crush toward black.
+local function GetAuraBorderTintValues()
+    local tint = GetTintValues()
+    return { tint[1] * tint[1], tint[2] * tint[2], tint[3] * tint[3] }
+end
+
+-- force=true: enable / intensity / custom color change (overwrites Auras color).
+-- force=false/nil: login/profile apply — keep Auras color if the player set buff_color_user_override.
+local function SyncAuraBorderColorFromDarkMode(tint, force)
+    local modules = addon.db and addon.db.profile and addon.db.profile.modules
+    if not modules then return end
+    local ab = modules.auraborders
+    if not ab then
+        ab = {}
+        modules.auraborders = ab
+    end
+    if tint then
+        if not force and ab.buff_color_user_override then
+            return
+        end
+        ab.buff_color = { r = tint[1], g = tint[2], b = tint[3] }
+        ab.buff_color_user_override = false
+    else
+        ab.buff_color = { r = 0.2, g = 0.2, b = 0.2 }
+        ab.buff_color_user_override = false
+    end
+    if addon.RefreshAuraBordersSystem then
+        addon.RefreshAuraBordersSystem()
+    end
+end
+
+-- forceAuraSync: when true, push dark-mode tint onto aura buff borders (and clear user override).
+local function ApplyDarkMode(forceAuraSync)
     if DarkModeModule.applied then
-        -- Refresh: restore first, then re-apply
-        RestoreDarkMode()
+        -- Texture refresh only — do not reset aura border color mid-reapply.
+        RestoreDarkMode(false)
         DarkModeModule.applied = false
     end
 
@@ -794,8 +909,19 @@ local function ApplyDarkMode()
     DarkenCastbarBorders(tint)
     DarkenBackpackCutout(tint)
     DarkenAddonButtonBorders(tint)
+    DarkenCompactRaidFrameManager(tint)
+
+    -- Re-pin hide_main_bar_background (art/gryphon alpha) after SetVertexColor.
+    if addon.RefreshActionBarVisibility then
+        addon.RefreshActionBarVisibility()
+    end
 
     DarkModeModule.applied = true
+    SyncAuraBorderColorFromDarkMode(GetAuraBorderTintValues(), forceAuraSync == true)
+
+    if addon.RefreshNameplateCastIconChrome then
+        addon.RefreshNameplateCastIconChrome()
+    end
 
     -- Delayed re-darken for XP/Rep borders: mainbars creates DragonflightUI bars
     -- and restyles RetailUI textures at various times. A second pass at 0.5s
@@ -807,8 +933,18 @@ local function ApplyDarkMode()
     end)
 end
 
-RestoreDarkMode = function()
-    if not DarkModeModule.applied then return end
+-- resetAuraBorders defaults to true (module/options disable). Pass false for texture-only re-apply.
+RestoreDarkMode = function(resetAuraBorders)
+    if resetAuraBorders == nil then
+        resetAuraBorders = true
+    end
+
+    if not DarkModeModule.applied then
+        if resetAuraBorders then
+            SyncAuraBorderColorFromDarkMode(nil, true)
+        end
+        return
+    end
 
     -- Restore ALL tracked textures efficiently
     for texture in pairs(DarkModeModule.darkenedTextures) do
@@ -829,14 +965,25 @@ RestoreDarkMode = function()
     end
 
     DarkModeModule.applied = false
+    if resetAuraBorders then
+        SyncAuraBorderColorFromDarkMode(nil, true)
+    end
+
+    if addon.RefreshNameplateCastIconChrome then
+        addon.RefreshNameplateCastIconChrome()
+    end
+
+    if addon.RefreshActionBarVisibility then
+        addon.RefreshActionBarVisibility()
+    end
 end
 
-local function RefreshDarkMode()
+local function RefreshDarkMode(forceAuraSync)
     if DarkModeModule.applied then
-        RestoreDarkMode()
+        RestoreDarkMode(false)
     end
     if IsModuleEnabled() then
-        ApplyDarkMode()
+        ApplyDarkMode(forceAuraSync == true)
     end
 end
 
@@ -952,12 +1099,11 @@ local function InstallNameBackgroundVertexGuards()
 end
 
 local function InstallVertexColorGuards()
-    if DarkModeModule.hooks.vertexGuardsInstalled then return end
-
-    -- Action bar button NormalTextures
+    -- Idempotent: Extra Bar buttons may not exist on the first PEW pass.
     local prefixes = {
         "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton",
         "MultiBarRightButton", "MultiBarLeftButton", "BonusActionButton",
+        "DragonUI_ExtraBarButton",
     }
     for _, prefix in ipairs(prefixes) do
         for i = 1, 12 do
@@ -1016,10 +1162,17 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 
         addon:After(0.5, function()
             if addon.db and addon.db.RegisterCallback then
-                addon.db.RegisterCallback(addon, "OnProfileChanged", OnProfileChanged)
-                addon.db.RegisterCallback(addon, "OnProfileCopied", OnProfileChanged)
-                addon.db.RegisterCallback(addon, "OnProfileReset", OnProfileChanged)
+                addon.db.RegisterCallback(DarkModeModule, "OnProfileChanged", OnProfileChanged)
+                addon.db.RegisterCallback(DarkModeModule, "OnProfileCopied", OnProfileChanged)
+                addon.db.RegisterCallback(DarkModeModule, "OnProfileReset", OnProfileChanged)
             end
+        end)
+
+    elseif event == "ADDON_LOADED" and COMPACT_RAIDFRAME_ADDONS[arg1] then
+        if not DarkModeModule.applied then return end
+        addon:After(0.1, function()
+            if not DarkModeModule.applied then return end
+            DarkenCompactRaidFrameManager(GetTintValues())
         end)
 
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -1148,6 +1301,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             DarkenCastbarBorders(tint)
             -- Also catch addon buttons that may have loaded late
             DarkenAddonButtonBorders(tint)
+            DarkenCompactRaidFrameManager(tint)
         end)
 
     elseif event == "UPDATE_SHAPESHIFT_FORM" or event == "UPDATE_BONUS_ACTIONBAR"
@@ -1177,7 +1331,10 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         -- These fire frequently during shapeshift/flight when Blizzard resets
         -- button textures. Delay so Blizzard finishes its own vertex color changes first.
         if not DarkModeModule.applied then return end
+        if DarkModeModule.borderSweepPending then return end
+        DarkModeModule.borderSweepPending = true
         addon:After(0.05, function()
+            DarkModeModule.borderSweepPending = false
             if not DarkModeModule.applied then return end
             local tint = GetTintValues()
             DarkenActionButtonBorders(tint)
@@ -1292,6 +1449,12 @@ addon.RefreshDarkModeUnitFrames = function()
     DarkenUnitFrameBorders(ufTint)
 end
 
+-- Plates recycle constantly, so their chrome pulls the tint on demand instead of being swept.
+addon.GetDarkModeTint = function()
+    if not IsModuleEnabled() or not DarkModeModule.applied then return nil end
+    return GetTintValues()
+end
+
 -- Re-darken castbar borders (called from castbar.lua after lazy castbar creation)
 addon.RefreshDarkModeCastbars = function()
     if not DarkModeModule.applied then return end
@@ -1315,4 +1478,5 @@ addon.RefreshDarkModeActionButtons = function()
     DarkenActionButtonBorders(tint)
     DarkenStanceButtonBorders(tint)
     DarkenPetButtonBorders(tint)
+    InstallVertexColorGuards()
 end

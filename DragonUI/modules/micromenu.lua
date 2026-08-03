@@ -504,11 +504,46 @@ local function EnsureLootAnimationToMainBag()
     -- Simple approach: when bags are hidden, WoW should naturally redirect loot to main bag
 end
 
--- Additional utility helpers are defined below (frame cleanup,
--- button setup, and style/state synchronization).
+-- Character/PVP: GetButtonState/GetChecked are unreliable; use panel visibility.
+local function IsSpecialMicroButtonActive(button, buttonName)
+    if not button then return false end
+
+    if buttonName == "Character" then
+        return (_G.CharacterFrame and _G.CharacterFrame:IsVisible() and true or false)
+            or (_G.PaperDollFrame and _G.PaperDollFrame:IsVisible() and true or false)
+    elseif buttonName == "PVP" then
+        -- GetChecked is the PvP flag, not panel-open; GetButtonState is also unreliable.
+        return (_G.PVPFrame and _G.PVPFrame:IsVisible() and true or false)
+            or (_G.PVPParentFrame and _G.PVPParentFrame:IsVisible() and true or false)
+            or (_G.BattlefieldFrame and _G.BattlefieldFrame:IsVisible() and true or false)
+            or (_G.HonorFrame and _G.HonorFrame:IsVisible() and true or false)
+    end
+
+    return button.GetButtonState and button:GetButtonState() == "PUSHED"
+end
+
+local function ApplyMicroButtonPushed(button, pushed)
+    if not MicromenuModule.applied or not IsModuleEnabled() then
+        return
+    end
+    if not button or not button.dragonUIState or button.dragonUILastState == pushed then
+        return
+    end
+
+    button.dragonUILastState = pushed
+    button.dragonUIState.pushed = pushed
+    if button.HandleDragonUIState then
+        button.HandleDragonUIState()
+    end
+end
+
+local function SyncSpecialMicroButtonState(button, buttonName)
+    if button and button.dragonUIState then
+        ApplyMicroButtonPushed(button, IsSpecialMicroButtonActive(button, buttonName) and true or false)
+    end
+end
+
 local function UpdateCharacterPortraitVisibility()
-    -- Global hooks may still fire after module disable; bail out unless
-    -- micromenu is currently applied to preserve vanilla Character button visuals.
     if not MicromenuModule.applied or not IsModuleEnabled() then
         return
     end
@@ -810,7 +845,7 @@ local function RestoreMicromenuSystem()
                 end
 
                 button.dragonUIState = nil
-                button.dragonUITimer = nil
+                button.dragonUIPanelPushed = nil
                 button.dragonUILastState = nil
                 button.HandleDragonUIState = nil
             end
@@ -955,25 +990,27 @@ local function RestoreMicromenuSystem()
     end
     MicromenuModule.eventFrames = {}
 
-    -- Clear module references
+    -- Hide cancels the latency AceTimer via OnHide before we drop the ref.
+    local latencyBar = MicromenuModule.frames.latencyIndicator
+    if latencyBar then
+        latencyBar:Hide()
+    end
+
     MicromenuModule.frames = {}
     MicromenuModule.hooks = {}
     MicromenuModule.applied = false
     addon.ReanchorLFDSearchStatus = nil
 
-    -- Update Blizzard UI
     if UpdateMicroButtons then
         UpdateMicroButtons()
     end
 end
 
--- Ensure MicroButtonPortrait stays valid after Blizzard updates.
--- WeakAuras (and other addons using PlayerModel objects) can invalidate
--- portrait textures during their async initialization. By hooking
--- UpdateMicroButtons we re-apply the portrait texture every time
--- Blizzard refreshes the micro button bar.
+-- WeakAuras/PlayerModel init can invalidate MicroButtonPortrait; re-apply on Blizzard refresh.
 if UpdateMicroButtons then
     hooksecurefunc("UpdateMicroButtons", function()
+        SyncSpecialMicroButtonState(_G.CharacterMicroButton, "Character")
+        SyncSpecialMicroButtonState(_G.PVPMicroButton, "PVP")
         UpdateCharacterPortraitVisibility()
     end)
 end
@@ -1101,35 +1138,6 @@ local function ApplyMicromenuSystem()
         end
     end
 
-    -- Character/PVP are special: their panel-open state may not always map to
-    -- transient GetButtonState()=="PUSHED", so include checked/open-state signals.
-    local function IsSpecialMicroButtonActive(button, buttonName)
-        if not button then return false end
-
-        local pressed = button.GetButtonState and button:GetButtonState() == "PUSHED"
-        local checked = button.GetChecked and button:GetChecked()
-
-        if buttonName == "Character" then
-            -- Use ONLY panel visibility. GetButtonState/GetChecked cause false
-            -- positives: GetButtonState is PUSHED while holding the mouse (before
-            -- OnClick opens the frame), GetChecked may be stale from portrait loading.
-            return (_G.CharacterFrame and _G.CharacterFrame:IsVisible() and true or false)
-                or (_G.PaperDollFrame and _G.PaperDollFrame:IsVisible() and true or false)
-        elseif buttonName == "PVP" then
-            -- In WotLK 3.3.5a, GetChecked() on PVPMicroButton returns true when
-            -- the player has their PvP flag enabled - NOT when the panel is open.
-            -- Using it would permanently dim the icon on PvP servers.
-            -- GetButtonState() == "PUSHED" is also unreliable here.
-            -- Only use actual panel-frame visibility as the active signal.
-            return (_G.PVPFrame and _G.PVPFrame:IsVisible() and true or false)
-                or (_G.PVPParentFrame and _G.PVPParentFrame:IsVisible() and true or false)
-                or (_G.BattlefieldFrame and _G.BattlefieldFrame:IsVisible() and true or false)
-                or (_G.HonorFrame and _G.HonorFrame:IsVisible() and true or false)
-        end
-
-        return pressed
-    end
-
     -- ============================================================================
     -- SECTION 5: SPECIALIZED BUTTON SETUP
     -- ============================================================================
@@ -1224,7 +1232,6 @@ local function ApplyMicromenuSystem()
         button.dragonUIState = button.dragonUIState or {}
         button.dragonUIState.pushed = IsSpecialMicroButtonActive(button, "PVP")
         button.dragonUILastState = button.dragonUIState.pushed
-        button.dragonUITimer = button.dragonUITimer or 0
 
         -- ---- State handler: only manipulates DragonUIPVPIcon ----
         button.HandleDragonUIState = function()
@@ -1267,24 +1274,6 @@ local function ApplyMicromenuSystem()
                 end
             end
         end
-
-        -- ---- OnUpdate: poll panel visibility ----
-        button:SetScript('OnUpdate', function(self, elapsed)
-            self.dragonUITimer = (self.dragonUITimer or 0) + elapsed
-            if self.dragonUITimer >= 0.1 then
-                self.dragonUITimer = 0
-                local currentState = IsSpecialMicroButtonActive(self, "PVP")
-                if currentState ~= self.dragonUILastState then
-                    self.dragonUILastState = currentState
-                    if self.dragonUIState then
-                        self.dragonUIState.pushed = currentState
-                    end
-                    if self.HandleDragonUIState then
-                        self.HandleDragonUIState()
-                    end
-                end
-            end
-        end)
 
         -- ---- Mouse feedback (immediate response on click) ----
         if not button.DragonUIStateHooks then
@@ -1455,12 +1444,9 @@ local function ApplyMicromenuSystem()
             button.DragonUIBackgroundPushed = bgPushed
 
             -- STEP 3: Initialize state tracking properties
-            -- Always start unpushed: CharacterFrame can't be open on login/reload.
-            -- The OnUpdate poll will detect it correctly after the first tick.
             button.dragonUIState = {
-                pushed = false
+                pushed = IsSpecialMicroButtonActive(button, "Character")
             }
-            button.dragonUITimer = 0
             button.dragonUILastState = button.dragonUIState.pushed
 
             button.HandleDragonUIState = function()
@@ -1475,29 +1461,6 @@ local function ApplyMicromenuSystem()
                     bgPushed:Hide()
                 end
             end
-
-            -- STEP 4: Poll CharacterFrame visibility every 100ms.
-            -- Frame visibility (IsVisible) is the only reliable signal:
-            -- - GetButtonState is PUSHED while holding mouse, BEFORE OnClick opens
-            --   the frame, causing a premature false dim that resets on release.
-            -- - Pure IsVisible polling has no false-positive risk: CharacterFrame
-            --   is only visible when actually open.
-            button:SetScript('OnUpdate', function(self, elapsed)
-                self.dragonUITimer = (self.dragonUITimer or 0) + elapsed
-                if self.dragonUITimer >= 0.1 then
-                    self.dragonUITimer = 0
-                    local currentState = IsSpecialMicroButtonActive(self, "Character")
-                    if currentState ~= self.dragonUILastState then
-                        self.dragonUILastState = currentState
-                        if self.dragonUIState then
-                            self.dragonUIState.pushed = currentState
-                        end
-                        if self.HandleDragonUIState then
-                            self.HandleDragonUIState()
-                        end
-                    end
-                end
-            end)
 
             button.HandleDragonUIState()
         else
@@ -1667,8 +1630,17 @@ local function ApplyMicromenuSystem()
         MainMenuBarBackpackButton:SetPushedTexture(nil)
         MainMenuBarBackpackButton:SetHighlightTexture ''
         MainMenuBarBackpackButton:SetCheckedTexture ''
-        MainMenuBarBackpackButton:GetHighlightTexture():set_atlas('bag-main-highlight-2x')
-        MainMenuBarBackpackButton:GetCheckedTexture():set_atlas('bag-main-highlight-2x')
+        do
+            local ht = MainMenuBarBackpackButton:GetHighlightTexture()
+            ht:SetAllPoints()
+            ht:SetBlendMode('ADD')
+            ht:set_atlas('bag-main-highlight-2x')
+            local ct = MainMenuBarBackpackButton:GetCheckedTexture()
+            ct:SetAllPoints()
+            ct:SetBlendMode('ADD')
+            ct:SetDrawLayer('OVERLAY', 7)
+            ct:set_atlas('bag-main-highlight-2x')
+        end
         MainMenuBarBackpackButtonIconTexture:set_atlas('bag-main-2x')
 
         -- DON'T position MainMenuBarBackpackButton here if using overlay - will be positioned by the overlay
@@ -1692,19 +1664,37 @@ local function ApplyMicromenuSystem()
         highlight:SetAlpha(.4);
         highlight:set_atlas('bag-border-highlight-2x', true)
         KeyRingButton:GetNormalTexture():set_atlas('bag-reagent-border-2x')
-        KeyRingButton:GetCheckedTexture():set_atlas('bag-border-highlight-2x', true)
-        -- Fix KeyRing highlight sync
+        do
+            local ct = KeyRingButton:GetCheckedTexture()
+            ct:SetAllPoints()
+            ct:SetBlendMode('ADD')
+            ct:SetDrawLayer('OVERLAY', 7)
+            ct:set_atlas('bag-border-highlight-2x')
+        end
+        -- Bagster replaces ContainerFrame_OnShow checked sync; highlight backpack/bag slots instead
         local function SyncKeyRingButton()
+            if addon.BagsterModule and addon.BagsterModule.BagsterModule
+                and addon.BagsterModule.BagsterModule.applied
+                and addon.BagsterHighlightMainMenuBags then
+                addon.BagsterHighlightMainMenuBags()
+                return
+            end
             if KeyRingButton then
-                KeyRingButton:SetChecked(IsBagOpen(-2) or false)
+                KeyRingButton:SetChecked(IsBagOpen(-2) and 1 or nil)
             end
         end
 
         if not MicromenuModule.hooks.KeyRingSyncHooks then
             hooksecurefunc("ToggleKeyRing", SyncKeyRingButton)
             hooksecurefunc("CloseAllBags", function()
+                if addon.BagsterModule and addon.BagsterModule.BagsterModule
+                    and addon.BagsterModule.BagsterModule.applied
+                    and addon.BagsterHighlightMainMenuBags then
+                    addon.BagsterHighlightMainMenuBags()
+                    return
+                end
                 if KeyRingButton then
-                    KeyRingButton:SetChecked(false)
+                    KeyRingButton:SetChecked(nil)
                 end
             end)
             hooksecurefunc("ContainerFrame_OnHide", SyncKeyRingButton)
@@ -1740,8 +1730,10 @@ local function ApplyMicromenuSystem()
                 normalTexture:Hide()
             end
 
-            bags:GetCheckedTexture():set_atlas('bag-border-highlight-2x', true)
+            bags:GetCheckedTexture():SetAllPoints()
+            bags:GetCheckedTexture():SetBlendMode('ADD')
             bags:GetCheckedTexture():SetDrawLayer('OVERLAY', 7)
+            bags:GetCheckedTexture():set_atlas('bag-border-highlight-2x')
 
             local highlight = bags:GetHighlightTexture();
             highlight:SetAllPoints();
@@ -1772,7 +1764,7 @@ local function ApplyMicromenuSystem()
                 bags.background = bags:CreateTexture(nil, 'BACKGROUND')
                 bags.background:SetSize(w, h)
                 bags.background:SetPoint('CENTER')
-                bags.background:SetTexture(addon._dir .. 'bagslots2x')
+                bags.background:SetTexture(addon._dir .. 'Bags\\bagslots2x')
                 bags.background:SetTexCoord(295 / 512, 356 / 512, 64 / 128, 125 / 128)
             end
             bags.background:Show()
@@ -1962,15 +1954,124 @@ local function ApplyMicromenuSystem()
         HideUnwantedBagFrames()
     end
 
+    -- Buttons layout as a grid; hover/combat visibility stays on pUiMicroMenu.
+    local MICRO_LAYOUT_BASE_Y = 55
+
+    local function MigrateMicroIconSpacingToPadding()
+        local mm = addon.db and addon.db.profile and addon.db.profile.micromenu
+        if not mm or mm.spacing_is_padding then
+            return
+        end
+        mm.spacing_is_padding = true
+        -- Old values were origin-to-origin stride; convert once to edge padding.
+        if mm.grayscale and mm.grayscale.icon_spacing ~= nil then
+            mm.grayscale.icon_spacing = mm.grayscale.icon_spacing - 14
+        end
+        if mm.normal and mm.normal.icon_spacing ~= nil then
+            mm.normal.icon_spacing = mm.normal.icon_spacing - 32
+        end
+    end
+
+    local function CollectPresentMicroButtons()
+        local list = {}
+        for i = 1, #MICRO_BUTTONS do
+            if MICRO_BUTTONS[i] then
+                list[#list + 1] = MICRO_BUTTONS[i]
+            end
+        end
+        return list
+    end
+
+    local function GetMicroLayoutMetrics(config, useGrayscale, numButtons)
+        local buttonWidth = useGrayscale and 14 or 32
+        local buttonHeight = useGrayscale and 19 or 40
+        local pad = tonumber(config.icon_spacing)
+        if pad == nil then
+            pad = useGrayscale and 1 or -6
+        end
+        local hStep = buttonWidth + pad
+        local vStep = buttonHeight + pad
+        local columns = math.floor(tonumber(config.columns) or 12)
+        if columns < 1 then
+            columns = 1
+        end
+        if numButtons < 1 then
+            return buttonWidth, buttonHeight, hStep, vStep, 1, 1, buttonWidth, buttonHeight
+        end
+        if columns > numButtons then
+            columns = numButtons
+        end
+        local rows = math.ceil(numButtons / columns)
+        local totalWidth = columns * buttonWidth + (columns - 1) * pad
+        local totalHeight = rows * buttonHeight + (rows - 1) * pad
+        return buttonWidth, buttonHeight, hStep, vStep, columns, rows, totalWidth, totalHeight
+    end
+
+    local function LayoutMicroButtons()
+        local menu = _G.pUiMicroMenu
+        if not menu or not addon.db or not addon.db.profile or not addon.db.profile.micromenu then
+            return
+        end
+
+        MigrateMicroIconSpacingToPadding()
+
+        local useGrayscale = addon.db.profile.micromenu.grayscale_icons
+        local config = addon.db.profile.micromenu[useGrayscale and "grayscale" or "normal"]
+        if not config then
+            return
+        end
+
+        local buttons = CollectPresentMicroButtons()
+        local numButtons = #buttons
+        if config.invert_order and numButtons > 1 then
+            local reversed = {}
+            for i = numButtons, 1, -1 do
+                reversed[#reversed + 1] = buttons[i]
+            end
+            buttons = reversed
+        end
+
+        local _, _, hStep, vStep, columns, _, totalWidth, totalHeight =
+            GetMicroLayoutMetrics(config, useGrayscale, numButtons)
+
+        for i = 1, numButtons do
+            local button = buttons[i]
+            local idx = i - 1
+            local x = (idx % columns) * hStep
+            local y = MICRO_LAYOUT_BASE_Y + math.floor(idx / columns) * vStep
+
+            if button.SetPoint == addon._noop then
+                button.SetPoint = UIParent.SetPoint
+            end
+            button:ClearAllPoints()
+            button:SetPoint("BOTTOMLEFT", menu, "BOTTOMRIGHT", x, y)
+            button.SetPoint = addon._noop
+        end
+
+        local menuScale = config.scale_menu or 1
+        local overlayWidth = (totalWidth + 10) * menuScale
+        local overlayHeight = (totalHeight + 10) * menuScale
+        local menuOffX = -(totalWidth / 2)
+        local menuOffY = -(MICRO_LAYOUT_BASE_Y + totalHeight / 2)
+
+        menu.editorOffX = menuOffX
+        menu.editorOffY = menuOffY
+
+        if menu.editorFrame and not InCombatLockdown() then
+            menu.editorFrame:SetSize(overlayWidth, overlayHeight)
+            menu:ClearAllPoints()
+            menu:SetPoint("BOTTOMRIGHT", menu.editorFrame, "CENTER", menuOffX, menuOffY)
+        end
+    end
+
     local function setupMicroButtons(xOffset)
-        local buttonxOffset = 0
+        MigrateMicroIconSpacingToPadding()
 
         local useGrayscale = addon.db.profile.micromenu.grayscale_icons
         local configMode = useGrayscale and "grayscale" or "normal"
         local config = addon.db.profile.micromenu[configMode]
 
         local menuScale = config.scale_menu
-        local iconSpacing = config.icon_spacing
 
         local menu = _G.pUiMicroMenu
         if not menu then
@@ -1979,25 +2080,17 @@ local function ApplyMicromenuSystem()
         menu:SetScale(menuScale)
         menu:SetSize(10, 10)
 
-        -- Calculate overlay dimensions to match actual button span (in menu-scale coords)
-        -- Count only buttons that actually exist (some may be nil on certain servers)
-        local numButtons = 0
-        for _, btn in pairs(MICRO_BUTTONS) do
-            if btn then numButtons = numButtons + 1 end
-        end
-        local buttonWidth = useGrayscale and 14 or 32
-        local buttonHeight = useGrayscale and 19 or 40
-        local totalWidth = (numButtons - 1) * iconSpacing + buttonWidth
+        local presentButtons = CollectPresentMicroButtons()
+        local numButtons = #presentButtons
+        local _, _, _, _, _, _, totalWidth, totalHeight =
+            GetMicroLayoutMetrics(config, useGrayscale, numButtons)
 
-        -- Scale overlay to match menu scale so coordinates are in the same space
         local overlayWidth = (totalWidth + 10) * menuScale
-        local overlayHeight = (buttonHeight + 10) * menuScale
+        local overlayHeight = (totalHeight + 10) * menuScale
 
-        -- Menu-to-overlay offset: buttons are at (BOTTOMRIGHT of menu + (0..totalWidth, 55) in menu-local coords)
-        -- WoW multiplies SetPoint offsets by the frame's own scale, so we use UNSCALED values here.
-        -- Screen displacement = offset * menuScale, which then cancels with button offsets * menuScale.
+        -- Offsets must stay unscaled: WoW multiplies SetPoint by the frame's own scale.
         local menuOffX = -(totalWidth / 2)
-        local menuOffY = -(55 + buttonHeight / 2)
+        local menuOffY = -(MICRO_LAYOUT_BASE_Y + totalHeight / 2)
 
         if not menu.registeredInEditor then
             -- PATTERN: Overlay = position anchor, real UI anchored TO overlay
@@ -2034,7 +2127,8 @@ local function ApplyMicromenuSystem()
                 onHide = function()
                     -- Re-anchor menu when leaving editor mode (overlay may have been dragged)
                     menu:ClearAllPoints()
-                    menu:SetPoint("BOTTOMRIGHT", microMenuFrame, "CENTER", menuOffX, menuOffY)
+                    menu:SetPoint("BOTTOMRIGHT", microMenuFrame, "CENTER",
+                        menu.editorOffX or menuOffX, menu.editorOffY or menuOffY)
                 end
             })
 
@@ -2050,7 +2144,8 @@ local function ApplyMicromenuSystem()
             end
         end
 
-        for _, button in pairs(MICRO_BUTTONS) do
+        for i = 1, #MICRO_BUTTONS do
+            local button = MICRO_BUTTONS[i]
             if button then
                 local buttonName = button:GetName():gsub('MicroButton', '')
                 local name = string.lower(buttonName);
@@ -2071,8 +2166,6 @@ local function ApplyMicromenuSystem()
                     button:SetSize(32, 40)
                 end
 
-                button:ClearAllPoints()
-                button:SetPoint('BOTTOMLEFT', menu, 'BOTTOMRIGHT', buttonxOffset, 55)
                 button.SetPoint = addon._noop
                 button:SetHitRectInsets(0, 0, 0, 0)
 
@@ -2190,12 +2283,13 @@ local function ApplyMicromenuSystem()
                         bgPushed:Hide()
                         button.DragonUIBackgroundPushed = bgPushed
 
-                        -- Initialize state tracking properties
+                        local pushedNow = button:GetButtonState() == "PUSHED"
                         button.dragonUIState = {
-                            pushed = false
+                            pushed = pushedNow
                         }
-                        button.dragonUITimer = 0
-                        button.dragonUILastState = false
+                        button.dragonUILastState = pushedNow
+                        -- Panel-open state from SetButtonState; mouse-hold is transient on the C side.
+                        button.dragonUIPanelPushed = pushedNow
 
                         button.HandleDragonUIState = function()
                             local state = button.dragonUIState
@@ -2203,7 +2297,6 @@ local function ApplyMicromenuSystem()
                             if state and state.pushed then
                                 button.DragonUIBackground:Hide()
                                 button.DragonUIBackgroundPushed:Show()
-                                -- Shift highlight to match pushed displacement
                                 if hlTex then
                                     hlTex:ClearAllPoints()
                                     hlTex:SetPoint('TOPLEFT', button, 'TOPLEFT', offX, offY)
@@ -2220,110 +2313,60 @@ local function ApplyMicromenuSystem()
                         end
                         button.HandleDragonUIState()
 
-                        -- Save original OnUpdate so the Blizzard handler
-                        -- (performance indicator, tooltip data, etc.) keeps
-                        -- running alongside our push-state tracker.
+                        -- MainMenu Blizzard OnUpdate must keep running; re-skin only if art drifts.
                         local origOnUpdate = button:GetScript('OnUpdate')
-                        -- Only MainMenuMicroButton has an aggressive Blizzard
-                        -- OnUpdate that overwrites textures every frame.
-                        local needsTextureGuard = (buttonName == "MainMenu") and origOnUpdate ~= nil
-                        local cachedUpCoords, cachedDownCoords, cachedDisabledCoords, cachedMouseoverCoords
-                        if needsTextureGuard then
-                            cachedUpCoords = upCoords
-                            cachedDownCoords = downCoords
-                            cachedDisabledCoords = disabledCoords
-                            cachedMouseoverCoords = mouseoverCoords
+                        if buttonName == "MainMenu" and origOnUpdate then
+                            local normalTexture = button:GetNormalTexture()
+                            local guardPath = normalTexture and normalTexture:GetTexture()
+
+                            local function ReapplyColoredArt(self)
+                                local nt = self:GetNormalTexture()
+                                if nt and upCoords then
+                                    nt:SetTexture(microTexture)
+                                    nt:SetTexCoord(upCoords[1], upCoords[2], upCoords[3], upCoords[4])
+                                    guardPath = nt:GetTexture()
+                                end
+                                local pt = self:GetPushedTexture()
+                                if pt and downCoords then
+                                    pt:SetTexture(microTexture)
+                                    pt:SetTexCoord(downCoords[1], downCoords[2], downCoords[3], downCoords[4])
+                                end
+                                local dt = self:GetDisabledTexture()
+                                if dt and disabledCoords then
+                                    dt:SetTexture(microTexture)
+                                    dt:SetTexCoord(disabledCoords[1], disabledCoords[2], disabledCoords[3], disabledCoords[4])
+                                end
+                                local ht = self:GetHighlightTexture()
+                                if ht and mouseoverCoords then
+                                    ht:SetTexture(microTexture)
+                                    ht:SetTexCoord(mouseoverCoords[1], mouseoverCoords[2], mouseoverCoords[3], mouseoverCoords[4])
+                                end
+                            end
+
+                            button:SetScript('OnUpdate', function(self, elapsed)
+                                origOnUpdate(self, elapsed)
+
+                                local nt = self:GetNormalTexture()
+                                if not guardPath or not nt or nt:GetTexture() ~= guardPath then
+                                    ReapplyColoredArt(self)
+                                end
+                            end)
                         end
 
-                        button:SetScript('OnUpdate', function(self, elapsed)
-                            -- Ensure timer is initialized
-                            if not self.dragonUITimer then
-                                self.dragonUITimer = 0
-                            end
+                        if not button.DragonUIStateHooks then
+                            button:HookScript("OnMouseDown", function(self)
+                                ApplyMicroButtonPushed(self, true)
+                            end)
+                            button:HookScript("OnMouseUp", function(self)
+                                ApplyMicroButtonPushed(self, self.dragonUIPanelPushed and true or false)
+                            end)
+                            button.DragonUIStateHooks = true
+                        end
 
-                            self.dragonUITimer = self.dragonUITimer + elapsed
-                            if self.dragonUITimer >= 0.1 then
-                                self.dragonUITimer = 0
-                                local currentState = self:GetButtonState() == "PUSHED"
-                                if currentState ~= self.dragonUILastState then
-                                    self.dragonUILastState = currentState
-                                    if self.dragonUIState then
-                                        self.dragonUIState.pushed = currentState
-                                    end
-                                    if self.HandleDragonUIState then
-                                        self.HandleDragonUIState()
-                                    end
-                                end
-                            end
-
-                            -- Chain the original Blizzard OnUpdate so the
-                            -- performance indicator and tooltip keep working.
-                            if origOnUpdate then
-                                origOnUpdate(self, elapsed)
-                            end
-
-                            -- Re-apply colored textures after Blizzard's
-                            -- OnUpdate which overwrites them every frame.
-                            if needsTextureGuard then
-                                if cachedUpCoords then
-                                    local nt = self:GetNormalTexture()
-                                    if nt then
-                                        nt:SetTexture(microTexture)
-                                        nt:SetTexCoord(cachedUpCoords[1], cachedUpCoords[2], cachedUpCoords[3], cachedUpCoords[4])
-                                    end
-                                end
-                                if cachedDownCoords then
-                                    local pt = self:GetPushedTexture()
-                                    if pt then
-                                        pt:SetTexture(microTexture)
-                                        pt:SetTexCoord(cachedDownCoords[1], cachedDownCoords[2], cachedDownCoords[3], cachedDownCoords[4])
-                                    end
-                                end
-                                if cachedDisabledCoords then
-                                    local dt = self:GetDisabledTexture()
-                                    if dt then
-                                        dt:SetTexture(microTexture)
-                                        dt:SetTexCoord(cachedDisabledCoords[1], cachedDisabledCoords[2], cachedDisabledCoords[3], cachedDisabledCoords[4])
-                                    end
-                                end
-                                if cachedMouseoverCoords then
-                                    local ht = self:GetHighlightTexture()
-                                    if ht then
-                                        ht:SetTexture(microTexture)
-                                        ht:SetTexCoord(cachedMouseoverCoords[1], cachedMouseoverCoords[2], cachedMouseoverCoords[3], cachedMouseoverCoords[4])
-                                    end
-                                end
-                            end
-                        end)
-
-                        -- Instant push: OnMouseDown fires BEFORE Blizzard
-                        -- moves the icon, so highlight shifts in sync.
-                        button:HookScript("OnMouseDown", function(self)
-                            if not self.dragonUIState then return end
-                            -- Only act on push direction (not already pushed)
-                            if not self.dragonUIState.pushed then
-                                self.dragonUIState.pushed = true
-                                self.dragonUILastState = true
-                                if self.HandleDragonUIState then
-                                    self.HandleDragonUIState()
-                                end
-                            end
-                        end)
-
-                        -- Instant unpush: SetButtonState hook fires right
-                        -- when Blizzard internally sets NORMAL.
                         if not button.DragonUISetButtonStateHooked then
                             hooksecurefunc(button, "SetButtonState", function(self, state)
-                                if state ~= "PUSHED" then
-                                    -- Only act on unpush direction
-                                    if self.dragonUIState and self.dragonUIState.pushed then
-                                        self.dragonUIState.pushed = false
-                                        self.dragonUILastState = false
-                                        if self.HandleDragonUIState then
-                                            self.HandleDragonUIState()
-                                        end
-                                    end
-                                end
+                                self.dragonUIPanelPushed = (state == "PUSHED")
+                                ApplyMicroButtonPushed(self, self.dragonUIPanelPushed)
                             end)
                             button.DragonUISetButtonStateHooked = true
                         end
@@ -2368,30 +2411,22 @@ local function ApplyMicromenuSystem()
                 if buttonName ~= "Character" then
                     RestoreOriginalHandlers(button)
                 end
-
-                buttonxOffset = buttonxOffset + iconSpacing
             end
         end
+        LayoutMicroButtons()
         UpdateCharacterPortraitVisibility()
 
-        -- ====================================================================
-        -- LATENCY INDICATOR (StatusBar overlay on HelpMicroButton)
-        -- Green (<300ms), Yellow (300-600ms), Red (>600ms)
-        -- Uses StatusBar frame with performance bar texture as vertical
-        -- overlay covering the full height of HelpMicroButton.
-        -- ====================================================================
+        -- Latency strip on HelpMicroButton: green / yellow / red from GetNetStats.
         local showLatency = addon.db.profile.micromenu.show_latency_indicator
         if showLatency and HelpMicroButton then
             if not MicromenuModule.frames.latencyIndicator then
                 local latencyBar = CreateFrame("StatusBar", "DragonUIPerformanceBar", HelpMicroButton)
-                latencyBar.updateInterval = 0
 
-                latencyBar:SetStatusBarTexture(addon._dir .. "ui-mainmenubar-performancebar")
+                latencyBar:SetStatusBarTexture(addon._dir .. "Micromenu\\ui-mainmenubar-performancebar")
                 latencyBar:SetStatusBarColor(0, 1, 0)
                 latencyBar:GetStatusBarTexture():SetBlendMode("ADD")
                 latencyBar:GetStatusBarTexture():SetDrawLayer("OVERLAY")
 
-                -- Tooltip on hover
                 latencyBar:EnableMouse(true)
                 latencyBar:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -2405,27 +2440,38 @@ local function ApplyMicromenuSystem()
                     GameTooltip:Hide()
                 end)
 
-                latencyBar:SetScript("OnUpdate", function(self, elapsed)
-                    if self.updateInterval > 0 then
-                        self.updateInterval = self.updateInterval - elapsed
+                local function UpdateLatencyColor(self)
+                    local _, _, latency = GetNetStats()
+                    latency = latency or 0
+                    if latency > PERFORMANCEBAR_MEDIUM_LATENCY then
+                        self:SetStatusBarColor(1, 0, 0)
+                    elseif latency > PERFORMANCEBAR_LOW_LATENCY then
+                        self:SetStatusBarColor(1, 1, 0)
                     else
-                        self.updateInterval = 10
-                        local _, _, latency = GetNetStats()
-                        latency = latency or 0
-                        if latency > PERFORMANCEBAR_MEDIUM_LATENCY then
-                            self:SetStatusBarColor(1, 0, 0)
-                        elseif latency > PERFORMANCEBAR_LOW_LATENCY then
-                            self:SetStatusBarColor(1, 1, 0)
-                        else
-                            self:SetStatusBarColor(0, 1, 0)
-                        end
+                        self:SetStatusBarColor(0, 1, 0)
+                    end
+                end
+
+                latencyBar:SetScript("OnShow", function(self)
+                    UpdateLatencyColor(self)
+                    if not self.duiLatencyTimer and addon.core then
+                        self.duiLatencyTimer = addon.core:ScheduleRepeatingTimer(UpdateLatencyColor,
+                            PERFORMANCEBAR_UPDATE_INTERVAL or 10, self)
                     end
                 end)
+                latencyBar:SetScript("OnHide", function(self)
+                    if self.duiLatencyTimer and addon.core then
+                        addon.core:CancelTimer(self.duiLatencyTimer, true)
+                        self.duiLatencyTimer = nil
+                    end
+                end)
+
+                -- Created shown; Hide so the Show() below fires OnShow and starts the timer.
+                latencyBar:Hide()
 
                 MicromenuModule.frames.latencyIndicator = latencyBar
             end
 
-            -- Size and position adapt to grayscale vs colored mode
             local bar = MicromenuModule.frames.latencyIndicator
             bar:SetParent(HelpMicroButton)
             bar:SetFrameStrata(HelpMicroButton:GetFrameStrata())
@@ -2455,23 +2501,7 @@ local function ApplyMicromenuSystem()
     -- ============================================================================
 
     local function updateMicroButtonSpacing()
-        if not _G.pUiMicroMenu then
-            return
-        end
-
-        local useGrayscale = addon.db.profile.micromenu.grayscale_icons
-        local configMode = useGrayscale and "grayscale" or "normal"
-        local config = addon.db.profile.micromenu[configMode]
-        local iconSpacing = config.icon_spacing
-
-        local buttonxOffset = 0
-        for _, button in pairs(MICRO_BUTTONS) do
-            if button then
-                button:ClearAllPoints()
-                button:SetPoint('BOTTOMLEFT', _G.pUiMicroMenu, 'BOTTOMRIGHT', buttonxOffset, 55)
-                buttonxOffset = buttonxOffset + iconSpacing
-            end
-        end
+        LayoutMicroButtons()
     end
 
     function addon.RefreshMicromenuSpacing()
@@ -2642,24 +2672,7 @@ end
 
     addon.RefreshMicromenuIcons()
 
-    local buttonxOffset = 0
-    for _, button in pairs(MICRO_BUTTONS) do
-        if button then
-            local originalSetPoint = button.SetPoint
-            if button.SetPoint == addon._noop then
-                button.SetPoint = UIParent.SetPoint
-            end
-
-            button:ClearAllPoints()
-            button:SetPoint('BOTTOMLEFT', _G.pUiMicroMenu, 'BOTTOMRIGHT', buttonxOffset, 55)
-
-            if originalSetPoint == addon._noop then
-                button.SetPoint = originalSetPoint
-            end
-
-            buttonxOffset = buttonxOffset + config.icon_spacing
-        end
-    end
+    LayoutMicroButtons()
 
     addon.RefreshMicromenuVehicle()
     UpdateCharacterPortraitVisibility()
@@ -2743,7 +2756,7 @@ end
     local function ApplyLFGFrameStyle()
         MiniMapLFGFrameIcon:SetScale(1.5)
         MiniMapLFGFrameBorder:SetTexture(nil)
-        MiniMapLFGFrame.eye.texture:SetTexture(addon._dir .. 'uigroupfinderflipbookeye.tga')
+        MiniMapLFGFrame.eye.texture:SetTexture(addon._dir .. 'Micromenu\\uigroupfinderflipbookeye.tga')
     end
 
     ApplyLFGFrameStyle()

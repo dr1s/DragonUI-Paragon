@@ -6,8 +6,6 @@
 local addon = select(2, ...);
 local L = addon.L
 
-local atlas = addon.minimap_SetAtlas;
-
 -- ============================================================================
 -- MODULE STATE
 -- ============================================================================
@@ -16,7 +14,6 @@ local MinimapModule = {
     initialized = false,
     applied = false,
     originalStates = {},
-    registeredEvents = {},
     hooks = {},
     stateDrivers = {},
     frames = {},
@@ -49,19 +46,22 @@ local function IsMinimapSystemActive()
     return IsModuleEnabled() and MinimapModule.applied
 end
 
+local function IsDragonUIMinimapControlling()
+    return MinimapModule.applied or MinimapModule._initializingMinimapSystem
+end
+
 local DEFAULT_MINIMAP_WIDTH = Minimap:GetWidth() * 1.36
 local DEFAULT_MINIMAP_HEIGHT = Minimap:GetHeight() * 1.36
 local blipScale = 1.12
 local BORDER_SIZE = 71 * 2 * 2 ^ 1
 local BORDER_TO_MAP_RATIO = BORDER_SIZE / (DEFAULT_MINIMAP_WIDTH / blipScale)
-local DRAGONUI_MINIMAP_MASK = "Interface\\AddOns\\DragonUI\\assets\\uiminimapmask.tga"
+local DRAGONUI_MINIMAP_MASK = "Interface\\AddOns\\DragonUI\\Textures\\Minimap\\uiminimapmask.tga"
 local VANILLA_MINIMAP_MASK = "Textures\\MinimapMask"
 
 local ADDON_ORBIT_RADIUS = 15
 local DRAGONUI_SETTINGS_BUTTON_SIZE = 21
-local DRAGONUI_SETTINGS_BUTTON_ICON = "Interface\\Icons\\INV_Misc_Head_Dragon_01"
-local DRAGONUI_SETTINGS_BUTTON_ICON_FALLBACK = "Interface\\Icons\\Ability_Mount_RedDragonhawk"
-local DRAGONUI_CLASSIC_COLLECTOR_ICON = "Interface\\AddOns\\DragonUI\\assets\\dfrl_collector_toggle.tga"
+local DRAGONUI_SETTINGS_BUTTON_ICON = "Interface\\AddOns\\DragonUI\\Textures\\UI\\INV_Misc_Head_Dragon_01"
+local DRAGONUI_CLASSIC_COLLECTOR_ICON = "Interface\\AddOns\\DragonUI\\Textures\\Minimap\\dfrl_collector_toggle.tga"
 
 -- Addon icon whitelist: define before ReplaceBlizzardFrame
 local WHITE_LIST = {'MiniMapBattlefieldFrame', 'MiniMapTrackingButton', 'MiniMapMailFrame', 'HelpOpenTicketButton',
@@ -158,13 +158,8 @@ local function IsQuestMinimapPin(button)
         end
     end
 
-    -- pfQuest/Questie/TomTom minimap pins are nameless Buttons parented
-    -- directly to Minimap, so name/parent/child checks all miss them.
-    -- Detect by inspecting region textures: pins use textures shipped from
-    -- their own AddOn folder (e.g. "Interface\\AddOns\\pfQuest\\...",
-    -- "Interface\\AddOns\\Questie\\...", "Interface\\AddOns\\TomTom\\...").
-    -- This is a non-destructive read-only check that runs once per button
-    -- during the skin scan.
+    -- pfQuest/Questie/TomTom pins and TotemRadius rings are nameless Buttons on Minimap that name checks miss;
+    -- detect them (read-only) by their own AddOn folder in a region texture path so the skin leaves them alone.
     if button.GetNumRegions then
         for i = 1, button:GetNumRegions() do
             local region = select(i, button:GetRegions())
@@ -176,6 +171,8 @@ local function IsQuestMinimapPin(button)
                        or lower:find("pfmap", 1, true)
                        or lower:find("pfminimap", 1, true)
                        or lower:find("questie", 1, true)
+                       or lower:find("questhelper", 1, true)
+                       or lower:find("totemradius", 1, true)
                        or lower:find("\\tomtom\\", 1, true) then
                         button.DragonUI_IsQuestPin = true
                         return true
@@ -192,20 +189,6 @@ local function IsQuestMinimapPin(button)
     end
 
     return false
-end
-
--- Verify atlas function availability at startup
-local function GetAtlasFunction()
-    -- Check multiple possible locations of the atlas function
-    if addon.minimap_SetAtlas then
-        return addon.minimap_SetAtlas
-    elseif addon.SetAtlas then
-        return addon.SetAtlas
-    elseif SetAtlasTexture then
-        return SetAtlasTexture
-    else
-        return nil
-    end
 end
 
 local function UpdateMinimapCircleSize()
@@ -228,7 +211,7 @@ local function IsSexyMapHybridModeValue(mode)
 end
 
 local function UpdateMinimapMaskForRotation()
-    if not Minimap then return end
+    if not Minimap or not IsDragonUIMinimapControlling() then return end
 
     local isHybridMode = MinimapModule.sexyMapHybridMode
         or MinimapModule._allowExternalMask
@@ -305,7 +288,7 @@ local function ApplyRotateCVar(value)
 end
 
 local function UpdateIndoorRotationPolicy()
-    if not Minimap then return end
+    if not Minimap or not IsDragonUIMinimapControlling() then return end
     if MinimapModule._rotationPolicyUpdating then return end
 
     -- In SexyMap hybrid mode, DragonUI must not control rotateMinimap.
@@ -468,28 +451,25 @@ local function UpdateCalendarDate()
         return
     end
     normalTexture:SetAllPoints(gameTimeFrame)
-    SetAtlasTexture(normalTexture, 'Minimap-Calendar-' .. day .. '-Normal')
+    normalTexture:set_atlas('Minimap-Calendar-' .. day .. '-Normal', true)
 
     local highlightTexture = gameTimeFrame:GetHighlightTexture()
     if highlightTexture then
         highlightTexture:SetAllPoints(gameTimeFrame)
-        SetAtlasTexture(highlightTexture, 'Minimap-Calendar-' .. day .. '-Highlight')
+        highlightTexture:set_atlas('Minimap-Calendar-' .. day .. '-Highlight', true)
     end
 
     local pushedTexture = gameTimeFrame:GetPushedTexture()
     if pushedTexture then
         pushedTexture:SetAllPoints(gameTimeFrame)
-        SetAtlasTexture(pushedTexture, 'Minimap-Calendar-' .. day .. '-Pushed')
+        pushedTexture:set_atlas('Minimap-Calendar-' .. day .. '-Pushed', true)
     end
 end
 
 local function ReplaceBlizzardFrame(frame)
     -- Check combat lockdown before making secure frame changes
     if InCombatLockdown() then
-        MinimapModule.registeredEvents.PLAYER_REGEN_ENABLED = function()
-            ReplaceBlizzardFrame(frame)
-            MinimapModule.registeredEvents.PLAYER_REGEN_ENABLED = nil
-        end
+        addon.CombatQueue:Add("minimap_replace_blizzard_frame", ReplaceBlizzardFrame, frame)
         return
     end
 
@@ -532,7 +512,7 @@ local function ReplaceBlizzardFrame(frame)
         local minimapBorderTop = MinimapBorderTop
         minimapBorderTop:ClearAllPoints()
         minimapBorderTop:SetPoint("TOP", 0, 5)
-        SetAtlasTexture(minimapBorderTop, 'Minimap-Border-Top')
+        minimapBorderTop:set_atlas('Minimap-Border-Top', true)
         minimapBorderTop:SetSize(156, 20)
 
         local minimapZoneButton = MinimapZoneTextButton
@@ -687,11 +667,11 @@ local function ReplaceBlizzardFrame(frame)
 
         local minimapMailIconTexture = MiniMapMailIcon
         minimapMailIconTexture:SetAllPoints(minimapMailFrame)
-        SetAtlasTexture(minimapMailIconTexture, 'Minimap-Mail-Normal')
+        minimapMailIconTexture:set_atlas('Minimap-Mail-Normal', true)
 
         local backgroundTexture = _G[minimapTracking:GetName() .. "Background"]
         backgroundTexture:SetAllPoints(minimapTracking)
-        SetAtlasTexture(backgroundTexture, 'Minimap-Tracking-Background')
+        backgroundTexture:set_atlas('Minimap-Tracking-Background', true)
 
         local minimapTrackingButton = _G[minimapTracking:GetName() .. 'Button']
         minimapTrackingButton:ClearAllPoints()
@@ -708,17 +688,17 @@ local function ReplaceBlizzardFrame(frame)
 
         local normalTexture = minimapTrackingButton:GetNormalTexture() or minimapTrackingButton:CreateTexture(nil, "BORDER")
         normalTexture:SetAllPoints(minimapTrackingButton)
-        SetAtlasTexture(normalTexture, 'Minimap-Tracking-Normal')
+        normalTexture:set_atlas('Minimap-Tracking-Normal', true)
 
         minimapTrackingButton:SetNormalTexture(normalTexture)
 
         local highlightTexture = minimapTrackingButton:GetHighlightTexture()
         highlightTexture:SetAllPoints(minimapTrackingButton)
-        SetAtlasTexture(highlightTexture, 'Minimap-Tracking-Highlight')
+        highlightTexture:set_atlas('Minimap-Tracking-Highlight', true)
 
         local pushedTexture = minimapTrackingButton:GetPushedTexture() or minimapTrackingButton:CreateTexture(nil, "BORDER")
         pushedTexture:SetAllPoints(minimapTrackingButton)
-        SetAtlasTexture(pushedTexture, 'Minimap-Tracking-Pushed')
+        pushedTexture:set_atlas('Minimap-Tracking-Pushed', true)
 
         minimapTrackingButton:SetPushedTexture(pushedTexture)
     end
@@ -742,10 +722,10 @@ local function ReplaceBlizzardFrame(frame)
     end
 
     -- POI (Point of Interest) Custom Textures
-    minimapFrame:SetStaticPOIArrowTexture("Interface\\AddOns\\DragonUI\\assets\\poi-static")
-    minimapFrame:SetCorpsePOIArrowTexture("Interface\\AddOns\\DragonUI\\assets\\poi-corpse")
-    minimapFrame:SetPOIArrowTexture("Interface\\AddOns\\DragonUI\\assets\\poi-guard")
-    minimapFrame:SetPlayerTexture("Interface\\AddOns\\DragonUI\\assets\\poi-player")
+    minimapFrame:SetStaticPOIArrowTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\poi-static")
+    minimapFrame:SetCorpsePOIArrowTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\poi-corpse")
+    minimapFrame:SetPOIArrowTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\poi-guard")
+    minimapFrame:SetPlayerTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\poi-player")
 
     -- Player arrow size (configurable)
     local playerArrowSize = addon.db and addon.db.profile and addon.db.profile.minimap and
@@ -760,7 +740,7 @@ local function ReplaceBlizzardFrame(frame)
         useNewBlipStyle = true -- Default to new style
     end
 
-    local blipTexture = useNewBlipStyle and "Interface\\AddOns\\DragonUI\\assets\\objecticons" or
+    local blipTexture = useNewBlipStyle and "Interface\\AddOns\\DragonUI\\Textures\\Minimap\\objecticons" or
                             'Interface\\Minimap\\ObjectIcons'
     minimapFrame:SetBlipTexture(blipTexture)
 
@@ -778,7 +758,7 @@ local function ReplaceBlizzardFrame(frame)
                                addon.db.profile.minimap.blip_skin
             if useNew == nil then useNew = true end
 
-            local tex = useNew and "Interface\\AddOns\\DragonUI\\assets\\objecticons" or
+            local tex = useNew and "Interface\\AddOns\\DragonUI\\Textures\\Minimap\\objecticons" or
                             'Interface\\Minimap\\ObjectIcons'
 
             MinimapModule._settingBlipTexture = true
@@ -786,10 +766,10 @@ local function ReplaceBlizzardFrame(frame)
             MinimapModule._settingBlipTexture = false
 
             -- Re-apply POI textures (Carbonite resets these on init)
-            Minimap:SetStaticPOIArrowTexture("Interface\\AddOns\\DragonUI\\assets\\poi-static")
-            Minimap:SetCorpsePOIArrowTexture("Interface\\AddOns\\DragonUI\\assets\\poi-corpse")
-            Minimap:SetPOIArrowTexture("Interface\\AddOns\\DragonUI\\assets\\poi-guard")
-            Minimap:SetPlayerTexture("Interface\\AddOns\\DragonUI\\assets\\poi-player")
+            Minimap:SetStaticPOIArrowTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\poi-static")
+            Minimap:SetCorpsePOIArrowTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\poi-corpse")
+            Minimap:SetPOIArrowTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\poi-guard")
+            Minimap:SetPlayerTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\poi-player")
             -- Only re-apply mask if not in hybrid mode (SexyMap controls the mask/shape)
             local hybridCheck = MinimapModule.sexyMapHybridMode
                 or (addon.db and addon.db.profile and addon.db.profile.modules
@@ -841,8 +821,10 @@ local function ReplaceBlizzardFrame(frame)
     for _, points in ipairs(MINIMAP_POINTS) do
         Minimap:SetPoint(points[1], points[2], points[3], points[4] / blipScale, points[5] / blipScale)
     end
-    function GetMinimapShape()
-        return "ROUND"
+    if not isHybridMode then
+        function GetMinimapShape()
+            return "ROUND"
+        end
     end
 
     -- Enable mouse wheel zooming on minimap
@@ -869,7 +851,7 @@ local function ReplaceBlizzardFrame(frame)
         minimapBorderTexture:Hide()
         if not Minimap.Circle then
             Minimap.Circle = MinimapBackdrop:CreateTexture(nil, 'ARTWORK')
-            Minimap.Circle:SetTexture("Interface\\AddOns\\DragonUI\\assets\\uiminimapborder.tga")
+            Minimap.Circle:SetTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\uiminimapborder.tga")
         end
         UpdateMinimapCircleSize()
 
@@ -880,21 +862,21 @@ local function ReplaceBlizzardFrame(frame)
         zoomInButton:SetSize(25, 24)
         zoomInButton:SetHitRectInsets(0, 0, 0, 0)
 
-        normalTexture = zoomInButton:GetNormalTexture()
+        local normalTexture = zoomInButton:GetNormalTexture()
         normalTexture:SetAllPoints(zoomInButton)
-        SetAtlasTexture(normalTexture, 'Minimap-ZoomIn-Normal')
+        normalTexture:set_atlas('Minimap-ZoomIn-Normal', true)
 
-        highlightTexture = zoomInButton:GetHighlightTexture()
+        local highlightTexture = zoomInButton:GetHighlightTexture()
         highlightTexture:SetAllPoints(zoomInButton)
-        SetAtlasTexture(highlightTexture, 'Minimap-ZoomIn-Highlight')
+        highlightTexture:set_atlas('Minimap-ZoomIn-Highlight', true)
 
-        pushedTexture = zoomInButton:GetPushedTexture()
+        local pushedTexture = zoomInButton:GetPushedTexture()
         pushedTexture:SetAllPoints(zoomInButton)
-        SetAtlasTexture(pushedTexture, 'Minimap-ZoomIn-Pushed')
+        pushedTexture:set_atlas('Minimap-ZoomIn-Pushed', true)
 
         local disabledTexture = zoomInButton:GetDisabledTexture()
         disabledTexture:SetAllPoints(zoomInButton)
-        SetAtlasTexture(disabledTexture, 'Minimap-ZoomIn-Pushed')
+        disabledTexture:set_atlas('Minimap-ZoomIn-Pushed', true)
 
         local zoomOutButton = MinimapZoomOut
         zoomOutButton:ClearAllPoints()
@@ -903,21 +885,21 @@ local function ReplaceBlizzardFrame(frame)
         zoomOutButton:SetSize(20, 12)
         zoomOutButton:SetHitRectInsets(0, 0, 0, 0)
 
-        normalTexture = zoomOutButton:GetNormalTexture()
+        local normalTexture = zoomOutButton:GetNormalTexture()
         normalTexture:SetAllPoints(zoomOutButton)
-        SetAtlasTexture(normalTexture, 'Minimap-ZoomOut-Normal')
+        normalTexture:set_atlas('Minimap-ZoomOut-Normal', true)
 
-        highlightTexture = zoomOutButton:GetHighlightTexture()
+        local highlightTexture = zoomOutButton:GetHighlightTexture()
         highlightTexture:SetAllPoints(zoomOutButton)
-        SetAtlasTexture(highlightTexture, 'Minimap-ZoomOut-Highlight')
+        highlightTexture:set_atlas('Minimap-ZoomOut-Highlight', true)
 
-        pushedTexture = zoomOutButton:GetPushedTexture()
+        local pushedTexture = zoomOutButton:GetPushedTexture()
         pushedTexture:SetAllPoints(zoomOutButton)
-        SetAtlasTexture(pushedTexture, 'Minimap-ZoomOut-Pushed')
+        pushedTexture:set_atlas('Minimap-ZoomOut-Pushed', true)
 
-        disabledTexture = zoomOutButton:GetDisabledTexture()
+        local disabledTexture = zoomOutButton:GetDisabledTexture()
         disabledTexture:SetAllPoints(zoomOutButton)
-        SetAtlasTexture(disabledTexture, 'Minimap-ZoomOut-Pushed')
+        disabledTexture:set_atlas('Minimap-ZoomOut-Pushed', true)
     end -- not isHybridMode (backdrop, border, circle, zoom buttons)
 
     -- Reposition a single WorldStateCaptureBar to below the minimap
@@ -1068,6 +1050,8 @@ local function CreateMinimapBorderFrame(width, height)
     minimapBorderFrame._duiLastRotateEnabled = nil
     minimapBorderFrame._duiLastAppliedAngle = nil
     minimapBorderFrame:SetScript("OnUpdate", function(self, elapsed)
+        if not IsDragonUIMinimapControlling() then return end
+
         local rotateEnabled = GetCVar("rotateMinimap") == "1"
         local rotationInterval = rotateEnabled and 0.016 or 0.05
 
@@ -1269,7 +1253,7 @@ local function ApplyAddonIconSkin(button)
         button.circle = button:CreateTexture(nil, 'OVERLAY')
         button.circle:SetSize(23, 23)
         button.circle:SetPoint('CENTER', button)
-        button.circle:SetTexture("Interface\\AddOns\\DragonUI\\assets\\border_buttons.tga")
+        button.circle:SetTexture("Interface\\AddOns\\DragonUI\\Textures\\Minimap\\border_buttons.tga")
 
         -- Hook fade (once, permanent; functions check IsFadeEnabled() dynamically)
         if not button.DragonUI_FadeHooked then
@@ -1443,8 +1427,12 @@ local function GetAllMinimapButtons()
         if not parentFrame then
             return
         end
-
-        local children = { parentFrame:GetChildren() }
+        
+        -- Addons like Questie parent hundreds of map pins directly to Minimap, which overflows the Lua
+        -- C stack before we can filter them. pcall catches that error so we fail gracefully instead of
+        -- spamming an error every frame.
+        local ok, children = pcall(function() return { parentFrame:GetChildren() } end)
+        if not ok then return end
         for i = 1, #children do
             local child = children[i]
             if not child then
@@ -1465,6 +1453,31 @@ local function GetAllMinimapButtons()
     ScanFrame(MinimapBackdrop, false)
 
     return buttons
+end
+
+-- EnableMouse doesn't cascade to children, so every clickable minimap element (native Blizzard
+-- buttons, third-party addon icons, collected icons) needs to be listed individually for the
+-- hidden-minimap click-through to actually let clicks pass through everywhere, not just the circle.
+local function CollectMinimapClickThroughFrames()
+    local frames = {}
+    for name in pairs(BLIZZARD_MINIMAP_BUTTONS) do
+        -- MinimapBackdrop excluded: mouse-off overlay over the circle; enabling it eats native blip tooltips.
+        local namedFrame = name ~= 'MinimapBackdrop' and _G[name]
+        if namedFrame then table.insert(frames, namedFrame) end
+    end
+    for _, btn in ipairs(GetAllMinimapButtons()) do
+        table.insert(frames, btn)
+    end
+    local iconCollector = MinimapModule.frames and MinimapModule.frames.iconCollector
+    if iconCollector then
+        local ok, children = pcall(function() return { iconCollector:GetChildren() } end)
+        if ok then
+            for _, child in ipairs(children) do
+                if child and child.EnableMouse then table.insert(frames, child) end
+            end
+        end
+    end
+    return frames
 end
 
 -- Compatibility: some addons ship LibDBIcon with a larger default radius,
@@ -1526,7 +1539,6 @@ local function GetConfiguredMinimapCollector()
         MinimapModule = MinimapModule,
         DRAGONUI_SETTINGS_BUTTON_SIZE = DRAGONUI_SETTINGS_BUTTON_SIZE,
         DRAGONUI_SETTINGS_BUTTON_ICON = DRAGONUI_SETTINGS_BUTTON_ICON,
-        DRAGONUI_SETTINGS_BUTTON_ICON_FALLBACK = DRAGONUI_SETTINGS_BUTTON_ICON_FALLBACK,
         DRAGONUI_CLASSIC_COLLECTOR_ICON = DRAGONUI_CLASSIC_COLLECTOR_ICON,
         GetAllMinimapButtons = GetAllMinimapButtons,
         IsQuestMinimapPin = IsQuestMinimapPin,
@@ -1726,6 +1738,7 @@ local function GetUnmanagedCollectorButtonCount()
 end
 
 local minimapCollectorSyncFrame = CreateFrame("Frame")
+local SetCollectorSyncEnabled
 do
     local elapsed = 0
     local syncInterval = 1.00
@@ -1739,7 +1752,7 @@ do
         lastBackdropChildCount = -1
     end
 
-    minimapCollectorSyncFrame:SetScript("OnUpdate", function(_, dt)
+    local function CollectorSync_OnUpdate(_, dt)
         elapsed = elapsed + dt
         if elapsed < syncInterval then
             return
@@ -1787,8 +1800,18 @@ do
 
         if shouldRefresh then
             RefreshIntegratedMinimapCollector()
+            if addon.VisibilityFade then
+                addon.VisibilityFade.AddHoverFrames("minimap", CollectMinimapClickThroughFrames())
+            end
         end
-    end)
+    end
+
+    -- Armed by Apply, disarmed by Restore: a disabled module must not keep a per-frame poller.
+    SetCollectorSyncEnabled = function(enabled)
+        ResetSyncState()
+        elapsed = 0
+        minimapCollectorSyncFrame:SetScript("OnUpdate", enabled and CollectorSync_OnUpdate or nil)
+    end
 end
 
 -- Style PVP battleground frame with faction detection
@@ -1807,12 +1830,12 @@ local function StylePVPBattlefieldFrame()
     -- Detect player faction and apply appropriate textures
     local faction = string.lower(UnitFactionGroup('player'))
 
-    -- Apply textures using SetAtlasTexture
+    -- Apply textures using set_atlas
     if MiniMapBattlefieldFrame:GetNormalTexture() then
-        SetAtlasTexture(MiniMapBattlefieldFrame:GetNormalTexture(), 'Minimap-PVP-' .. faction .. '-Normal')
+        MiniMapBattlefieldFrame:GetNormalTexture():set_atlas('Minimap-PVP-' .. faction .. '-Normal', true)
     end
     if MiniMapBattlefieldFrame:GetPushedTexture() then
-        SetAtlasTexture(MiniMapBattlefieldFrame:GetPushedTexture(), 'Minimap-PVP-' .. faction .. '-Pushed')
+        MiniMapBattlefieldFrame:GetPushedTexture():set_atlas('Minimap-PVP-' .. faction .. '-Pushed', true)
     end
 
     -- Configure click script like in minimapa_old.lua
@@ -1873,6 +1896,8 @@ end
 -- Stored on module table so the hooksecurefunc post-hook can reference it
 -- without calling the global (which would cause infinite recursion)
 MinimapModule.UpdateRotation = function()
+    if not IsDragonUIMinimapControlling() then return end
+
     UpdateIndoorRotationPolicy()
 
     -- In hybrid mode, let SexyMap control the border visibility
@@ -1964,17 +1989,17 @@ function MinimapModule:UpdateTrackingIcon()
             -- Show the modern button as default "magnifying glass icon"
             local normalTexture = MiniMapTrackingButton:GetNormalTexture()
             if normalTexture then
-                SetAtlasTexture(normalTexture, 'Minimap-Tracking-Normal')
+                normalTexture:set_atlas('Minimap-Tracking-Normal', true)
             end
 
             local pushedTexture = MiniMapTrackingButton:GetPushedTexture()
             if pushedTexture then
-                SetAtlasTexture(pushedTexture, 'Minimap-Tracking-Pushed')
+                pushedTexture:set_atlas('Minimap-Tracking-Pushed', true)
             end
 
             local highlightTexture = MiniMapTrackingButton:GetHighlightTexture()
             if highlightTexture then
-                SetAtlasTexture(highlightTexture, 'Minimap-Tracking-Highlight')
+                highlightTexture:set_atlas('Minimap-Tracking-Highlight', true)
             end
         else
 
@@ -2005,17 +2030,17 @@ function MinimapModule:UpdateTrackingIcon()
         -- Use the RetailUI textures that already work (the ones from ReplaceBlizzardFrame)
         local normalTexture = MiniMapTrackingButton:GetNormalTexture()
         if normalTexture then
-            SetAtlasTexture(normalTexture, 'Minimap-Tracking-Normal')
+            normalTexture:set_atlas('Minimap-Tracking-Normal', true)
         end
 
         local pushedTexture = MiniMapTrackingButton:GetPushedTexture()
         if pushedTexture then
-            SetAtlasTexture(pushedTexture, 'Minimap-Tracking-Pushed')
+            pushedTexture:set_atlas('Minimap-Tracking-Pushed', true)
         end
 
         local highlightTexture = MiniMapTrackingButton:GetHighlightTexture()
         if highlightTexture then
-            SetAtlasTexture(highlightTexture, 'Minimap-Tracking-Highlight')
+            highlightTexture:set_atlas('Minimap-Tracking-Highlight', true)
         end
 
     end
@@ -2197,9 +2222,9 @@ function MinimapModule:ApplyMinimapSystem()
 
     -- Check combat lockdown
     if InCombatLockdown() then
-        self.registeredEvents.PLAYER_REGEN_ENABLED = function()
-            self:ApplyMinimapSystem()
-        end
+        addon.CombatQueue:Add("minimap_apply", function()
+            MinimapModule:ApplyMinimapSystem()
+        end)
         return
     end
 
@@ -2211,28 +2236,12 @@ function MinimapModule:ApplyMinimapSystem()
     HideIntegratedAddonMinimapButtons()
     
     -- Initialize the DragonUI minimap system
+    self._initializingMinimapSystem = true
     self:InitializeMinimapSystem()
-    
     self.applied = true
+    self._initializingMinimapSystem = nil
     self.isEnabled = true -- Legacy compatibility
-    
-
-end
-
--- EVENT HANDLING: Proper event registration/cleanup
-local function RegisterModuleEvents()
-    if MinimapModule.registeredEvents.PLAYER_REGEN_ENABLED then
-        local eventFrame = CreateFrame("Frame")
-        eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-        eventFrame:SetScript("OnEvent", function(self, event)
-            if MinimapModule.registeredEvents.PLAYER_REGEN_ENABLED then
-                MinimapModule.registeredEvents.PLAYER_REGEN_ENABLED()
-                MinimapModule.registeredEvents.PLAYER_REGEN_ENABLED = nil
-                self:UnregisterAllEvents()
-            end
-        end)
-        MinimapModule.frames.eventFrame = eventFrame
-    end
+    SetCollectorSyncEnabled(true)
 end
 
 function MinimapModule:RestoreMinimapSystem()
@@ -2242,11 +2251,15 @@ function MinimapModule:RestoreMinimapSystem()
 
     -- Check combat lockdown
     if InCombatLockdown() then
-        self.registeredEvents.PLAYER_REGEN_ENABLED = function()
-            self:RestoreMinimapSystem()
-        end
+        addon.CombatQueue:Add("minimap_restore", function()
+            MinimapModule:RestoreMinimapSystem()
+        end)
         return
     end
+
+    if addon.VisibilityFade then addon.VisibilityFade.Reset("minimap", 1) end
+
+    SetCollectorSyncEnabled(false)
 
     -- Hide DragonUI frames
     if self.minimapFrame then
@@ -2254,6 +2267,7 @@ function MinimapModule:RestoreMinimapSystem()
         self.frames.minimapFrame = nil
     end
     if self.borderFrame then
+        self.borderFrame:SetScript("OnUpdate", nil)
         self.borderFrame:Hide()
         self.frames.borderFrame = nil
     end
@@ -2307,12 +2321,6 @@ function MinimapModule:RestoreMinimapSystem()
     if MiniMapWorldMapButton then
         MiniMapWorldMapButton:Show()
     end
-    if MinimapBorder then
-        MinimapBorder:Show()
-    end
-    if Minimap.Circle then
-        Minimap.Circle:Hide()
-    end
 
     -- CRITICAL: Restore original Blizzard minimap mask
     if Minimap and self.originalMask then
@@ -2344,15 +2352,139 @@ function MinimapModule:RestoreMinimapSystem()
     -- Cleanup hooks (tracked for debugging)
     CleanupSecureHooks()
 
+    -- Stop DragonUI control before decoration teardown re-syncs rotation/mask state.
+    self.applied = false
+    self._initializingMinimapSystem = nil
+    self.isEnabled = false -- Legacy compatibility
+
     if addon.MinimapDecorations and addon.MinimapDecorations.Restore then
         addon.MinimapDecorations:Restore()
     end
 
-    self.applied = false
-    self.isEnabled = false -- Legacy compatibility
-    
+    -- Undo DragonUI-owned chrome only after we applied; never run this on cold start (fights other minimap addons).
+    local wasHybrid = self.sexyMapHybridMode or self._allowExternalBorderControl
+    if Minimap and Minimap.Circle then
+        Minimap.Circle:Hide()
+    end
+    if not wasHybrid then
+        if MinimapBorder then
+            MinimapBorder:Show()
+        end
+        if MinimapBorderTop then
+            MinimapBorderTop:ClearAllPoints()
+            MinimapBorderTop:SetPoint("TOPRIGHT")
+            MinimapBorderTop:SetTexture("Interface\\Minimap\\UI-Minimap-Border")
+            MinimapBorderTop:SetTexCoord(0.25, 1.0, 0.0, 0.125)
+            MinimapBorderTop:SetSize(192, 32)
+            MinimapBorderTop:SetAlpha(1)
+        end
+        if MinimapBackdrop and MinimapCluster then
+            MinimapBackdrop:ClearAllPoints()
+            MinimapBackdrop:SetPoint("CENTER", MinimapCluster, "CENTER", 0, -20)
+        end
+        local blizzFrames = {
+            MiniMapTrackingIcon, MiniMapTrackingIconOverlay, MiniMapMailBorder, MiniMapTrackingButtonBorder,
+        }
+        for _, frame in pairs(blizzFrames) do
+            if frame then
+                frame:SetAlpha(1)
+            end
+        end
+    end
+    if Minimap and self.activeMinimapScale then
+        Minimap:SetScale(1)
+        self.activeMinimapScale = nil
+    end
+    self.backdropYOffset = nil
+    if Minimap_UpdateRotationSetting then
+        Minimap_UpdateRotationSetting()
+    end
+
     addon:Print(L["Minimap module restored to Blizzard defaults"])
 end
+
+-- Blips don't respect MinimapCluster's cascaded alpha (confirmed: swapping to Blizzard's stock
+-- atlas only restyles them, doesn't hide them — they're still fully opaque). A nonexistent texture
+-- path renders nothing at all, so point there while hidden instead of touching Minimap's own alpha,
+-- which risks blips not refreshing until /reload.
+local function ApplyBlipTextureForFadeVisibility(shouldShow)
+    if not Minimap then return end
+    local settings = addon.db and addon.db.profile and addon.db.profile.minimap
+    if not settings then return end
+    local texture
+    if shouldShow then
+        texture = settings.blip_skin and "Interface\\AddOns\\DragonUI\\Textures\\Minimap\\objecticons"
+            or 'Interface\\Minimap\\ObjectIcons'
+    else
+        texture = "Interface\\AddOns\\DragonUI\\Textures\\Minimap\\blip_blank"
+    end
+    MinimapModule._settingBlipTexture = true
+    Minimap:SetBlipTexture(texture)
+    MinimapModule._settingBlipTexture = false
+end
+
+-- After the minimap's effective alpha (even cascaded, not just its own) sits at 0 for a while, the
+-- client stops refreshing the terrain texture — it comes back frozen/blank until something like a
+-- zoom change wakes it up. Bump the zoom a level and immediately revert it to force that refresh
+-- without an actual visible zoom change.
+local function ForceMinimapTerrainRefresh()
+    if not Minimap or not Minimap.GetZoom or not Minimap.SetZoom then return end
+    local currentZoom = Minimap:GetZoom()
+    Minimap:SetZoom(currentZoom + 1)
+    if Minimap:GetZoom() == currentZoom then
+        Minimap:SetZoom(math.max(0, currentZoom - 1))
+    end
+    Minimap:SetZoom(currentZoom)
+end
+
+local function OnMinimapFadeComplete(shouldShow)
+    if shouldShow then
+        ForceMinimapTerrainRefresh()
+    end
+end
+
+-- Alpha-only fade on MinimapCluster (never Minimap itself, and never Hide/Show) — Minimap's own
+-- SetAlpha/Hide has been reported to stall blip texture updates in 3.3.5a until /reload.
+local function SyncMinimapVisibility()
+    if not MinimapCluster or not addon.VisibilityFade then return end
+    local isHybridMode = MinimapModule.sexyMapHybridMode
+        or (addon.db and addon.db.profile and addon.db.profile.modules
+            and addon.db.profile.modules.minimap
+            and IsSexyMapHybridModeValue(addon.db.profile.modules.minimap.sexymap_mode))
+    if isHybridMode then
+        -- SexyMap owns the minimap's visuals in hybrid mode; don't fight it with our own fade.
+        addon.VisibilityFade.Reset("minimap", 1)
+        return
+    end
+    -- MinimapCluster's cascade covers Minimap/zone text/buttons, but DragonUI's own border ring
+    -- (self.borderFrame) and the addon-icon collector are siblings parented to UIParent, not
+    -- children — fade them explicitly too.
+    local extraFrames = {}
+    if MinimapModule.borderFrame then table.insert(extraFrames, MinimapModule.borderFrame) end
+    local iconCollector = MinimapModule.frames and MinimapModule.frames.iconCollector
+    if iconCollector then table.insert(extraFrames, iconCollector) end
+    -- MinimapBackdrop excluded on purpose: mouse-off overlay over the circle; enabling it eats native blip tooltips.
+    local hoverFrames = { MinimapCluster }
+    if Minimap then table.insert(hoverFrames, Minimap) end
+    if iconCollector then table.insert(hoverFrames, iconCollector) end
+    addon.VisibilityFade.Register("minimap", MinimapCluster, {
+        frames = extraFrames,
+        hoverFrames = hoverFrames,
+        -- IsMouseOver() polling (not OnEnter/OnLeave) so hovering any button drawn on top of the
+        -- minimap (settings gear, addon icon collector, zoom, tracking...) still counts as hover —
+        -- a plain geometric check doesn't care which frame actually wins the hit-test at that pixel.
+        pollHover = true,
+        -- Minimap isn't a secure/protected frame, so EnableMouse can react live even mid-combat.
+        clickThrough = true,
+        mouseSafeInCombat = true,
+        onVisibilityChange = ApplyBlipTextureForFadeVisibility,
+        onFadeComplete = OnMinimapFadeComplete,
+        dbTable = function() return addon.db and addon.db.profile and addon.db.profile.minimap end,
+    })
+    addon.VisibilityFade.AddHoverFrames("minimap", CollectMinimapClickThroughFrames())
+    addon.VisibilityFade.Update("minimap")
+end
+MinimapModule.SyncMinimapVisibility = SyncMinimapVisibility
 
 function MinimapModule:InitializeMinimapSystem()
     -- Load TimeManager addon if not loaded
@@ -2360,7 +2492,7 @@ function MinimapModule:InitializeMinimapSystem()
         LoadAddOn('Blizzard_TimeManager')
     end
 
-    self.minimapFrame = CreateUIFrame(230, 230, "MinimapFrame")
+    self.minimapFrame = addon.CreateUIFrame(230, 230, "MinimapFrame")
     -- Simple visual tweak: keep minimap editor overlay 10px lower.
     do
         local slice = self.minimapFrame and self.minimapFrame.NineSlice
@@ -2388,6 +2520,8 @@ function MinimapModule:InitializeMinimapSystem()
             -- Allow a small overflow so users can fine-tune near edges.
             self.minimapFrame:SetClampedToScreen(true)
             self.minimapFrame:SetClampRectInsets(20, -20, -20, -5)
+            -- Force full opacity while dragging so the user can actually see what they're moving.
+            if addon.VisibilityFade then addon.VisibilityFade.Reset("minimap", 1) end
         end,
         onHide = function()
             -- Remove custom clamp settings after editor mode.
@@ -2430,6 +2564,10 @@ function MinimapModule:InitializeMinimapSystem()
     --  ADD THIS LINE TO APPLY ALL SETTINGS AT STARTUP
     self:UpdateSettings()
 
+    -- Must run AFTER UpdateSettings(): it unconditionally applies settings.blip_skin's texture,
+    -- which would otherwise stomp the fade-aware blip texture chosen here right after login.
+    SyncMinimapVisibility()
+
     if self.UpdateRotation then
         self.UpdateRotation()
     end
@@ -2453,7 +2591,6 @@ function MinimapModule:Initialize()
     
     -- Check if minimap module is enabled
     if not IsModuleEnabled() then
-        -- Don't apply any DragonUI modifications when disabled
         return
     end
 
@@ -2531,7 +2668,7 @@ function MinimapModule:UpdateSettings()
             useNewBlipStyle = true -- Default to new style
         end
 
-        local blipTexture = useNewBlipStyle and "Interface\\AddOns\\DragonUI\\assets\\objecticons" or
+        local blipTexture = useNewBlipStyle and "Interface\\AddOns\\DragonUI\\Textures\\Minimap\\objecticons" or
                                 'Interface\\Minimap\\ObjectIcons'
         -- Use re-entrancy guard to avoid triggering our own SetBlipTexture hook
         MinimapModule._settingBlipTexture = true
@@ -2705,7 +2842,7 @@ function MinimapModule:ApplyAllSettings()
 
     --  APPLY BLIP TEXTURE (NEW VS OLD STYLE)
     if settings.blip_skin ~= nil and Minimap then
-        local blipTexture = settings.blip_skin and "Interface\\AddOns\\DragonUI\\assets\\objecticons" or
+        local blipTexture = settings.blip_skin and "Interface\\AddOns\\DragonUI\\Textures\\Minimap\\objecticons" or
                                 'Interface\\Minimap\\ObjectIcons'
         Minimap:SetBlipTexture(blipTexture)
     end
@@ -2757,6 +2894,7 @@ function addon:RefreshMinimap()
         MinimapModule:UpdateSettings()
         -- Also update tracking icon when settings change
         MinimapModule:UpdateTrackingIcon()
+        MinimapModule.SyncMinimapVisibility()
 
         -- Refresh addon icon skinning
         local skinEnabled = addon.db and addon.db.profile and addon.db.profile.minimap

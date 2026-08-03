@@ -35,6 +35,10 @@ local subTabs = {
     { key = "focus",  label = LO["Focus"] },
 }
 
+-- Search navigation sub-tab setter.
+Panel.subTabSetters = Panel.subTabSetters or {}
+Panel.subTabSetters["castbars"] = function(key) activeSubTab = key end
+
 -- ============================================================================
 -- COMMON CONTROLS BUILDER
 -- ============================================================================
@@ -71,20 +75,44 @@ local function AddCastbarControls(parent, dbPrefix, refreshFunc, opts)
         callback = refreshFunc,
     })
 
+    local iconDependents = {}
+    local function IsIconHidden()
+        return not C:GetDBValue(dbPrefix .. ".showIcon")
+    end
+    -- Sibling disabled states are evaluated once at build, so toggling Show Icon has to push them.
+    local function RefreshIconControlStates()
+        local hidden = IsIconHidden()
+        for i = 1, #iconDependents do
+            local widget = iconDependents[i]
+            if widget and widget.SetDisabled then
+                widget:SetDisabled(hidden)
+            end
+        end
+    end
+
     C:AddToggle(parent, {
         label = LO["Show Icon"],
         dbPath = dbPrefix .. ".showIcon",
-        callback = refreshFunc,
+        callback = function()
+            RefreshIconControlStates()
+            refreshFunc()
+        end,
     })
 
-    C:AddSlider(parent, {
+    iconDependents[#iconDependents + 1] = C:AddSlider(parent, {
         label = LO["Icon Size"],
         dbPath = dbPrefix .. ".sizeIcon",
         min = 1, max = 64, step = 1,
         width = 200,
-        disabled = function()
-            return not C:GetDBValue(dbPrefix .. ".showIcon")
-        end,
+        disabled = IsIconHidden,
+        callback = refreshFunc,
+    })
+
+    iconDependents[#iconDependents + 1] = C:AddToggle(parent, {
+        label = LO["Modern Icon Border"],
+        desc = LO["Modern Icon Border Desc"],
+        dbPath = dbPrefix .. ".modernIconBorder",
+        disabled = IsIconHidden,
         callback = refreshFunc,
     })
 
@@ -292,11 +320,11 @@ local function BuildCastbarsTab(scroll)
     C:AddSubTabs(scroll, subTabs, activeSubTab, function(key)
         activeSubTab = key
         Panel:SelectTab("castbars")
-    end)
+    end, subTabBuilders)
 
-    local builder = subTabBuilders[activeSubTab]
-    if builder then
-        builder(scroll)
+    if not Panel.indexing then
+        local builder = subTabBuilders[activeSubTab]
+        if builder then builder(scroll) end
     end
 end
 

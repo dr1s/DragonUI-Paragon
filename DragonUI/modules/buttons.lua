@@ -5,7 +5,6 @@ local unpack = unpack;
 local select = select;
 local format = string.format;
 local match = string.match;
-local GetTime = GetTime;
 local NUM_PET_ACTION_SLOTS = NUM_PET_ACTION_SLOTS;
 local NUM_SHAPESHIFT_SLOTS = NUM_SHAPESHIFT_SLOTS;
 local NUM_POSSESS_SLOTS = NUM_POSSESS_SLOTS;
@@ -32,7 +31,6 @@ local ButtonsModule = {
     originalValues = {},  -- Store original button states for restoration
     hooked = false,
     pendingRefresh = false,  -- Flag to indicate pending refresh after combat
-    rangeIndicatorSuppressedUntil = 0
 }
 
 -- Register with ModuleRegistry (if available)
@@ -56,6 +54,75 @@ end
 
 local function GetButtonsConfig()
     return addon.db and addon.db.profile and addon.db.profile.buttons
+end
+
+-- Blizzard in-range hotkey gray; custom color only needs OnUpdate recolor when it differs.
+local HOTKEY_DEFAULT_R, HOTKEY_DEFAULT_G, HOTKEY_DEFAULT_B = 0.6, 0.6, 0.6
+local hotkeyStyle = {
+    ready = false,
+    recolor = false,
+    r = HOTKEY_DEFAULT_R, g = HOTKEY_DEFAULT_G, b = HOTKEY_DEFAULT_B, a = 1,
+    font = nil, size = 12, flags = "OUTLINE",
+    sr = 0, sg = 0, sb = 0, sa = 1,
+}
+
+local function UpdateHotkeyStyleCache()
+    local db = GetButtonsConfig()
+    local hk = db and db.hotkey
+    local font = hk and hk.font
+    local color = hk and hk.color
+    local shadow = hk and hk.shadow
+
+    hotkeyStyle.font = (font and font[1])
+        or (addon.Fonts and addon.Fonts.ARIALN)
+        or "Fonts\\ARIALN.TTF"
+    hotkeyStyle.size = (hk and hk.font_size) or (font and font[2]) or 12
+    hotkeyStyle.flags = (font and font[3]) or "OUTLINE"
+
+    hotkeyStyle.r = (color and color[1]) or HOTKEY_DEFAULT_R
+    hotkeyStyle.g = (color and color[2]) or HOTKEY_DEFAULT_G
+    hotkeyStyle.b = (color and color[3]) or HOTKEY_DEFAULT_B
+    hotkeyStyle.a = (color and color[4]) or 1
+
+    hotkeyStyle.sr = (shadow and shadow[1]) or 0
+    hotkeyStyle.sg = (shadow and shadow[2]) or 0
+    hotkeyStyle.sb = (shadow and shadow[3]) or 0
+    hotkeyStyle.sa = (shadow and shadow[4]) or 1
+
+    hotkeyStyle.recolor = (hotkeyStyle.r ~= HOTKEY_DEFAULT_R)
+        or (hotkeyStyle.g ~= HOTKEY_DEFAULT_G)
+        or (hotkeyStyle.b ~= HOTKEY_DEFAULT_B)
+        or (hotkeyStyle.a ~= 1)
+    hotkeyStyle.ready = true
+end
+
+local function EnsureHotkeyStyleCache()
+    if not hotkeyStyle.ready then
+        UpdateHotkeyStyleCache()
+    end
+end
+
+local function ApplyHotkeyTypography(hotkey)
+    if not hotkey then return end
+    EnsureHotkeyStyleCache()
+    hotkey:SetFont(hotkeyStyle.font, hotkeyStyle.size, hotkeyStyle.flags)
+    hotkey:SetShadowOffset(-1.3, -1.1)
+    hotkey:SetShadowColor(hotkeyStyle.sr, hotkeyStyle.sg, hotkeyStyle.sb, hotkeyStyle.sa)
+end
+
+local function ApplyHotkeyBoundColor(hotkey)
+    if not hotkey then return end
+    EnsureHotkeyStyleCache()
+    hotkey:SetVertexColor(hotkeyStyle.r, hotkeyStyle.g, hotkeyStyle.b, hotkeyStyle.a)
+end
+
+function addon.ApplyHotkeyTypography(hotkey)
+    ApplyHotkeyTypography(hotkey)
+end
+
+function addon.GetHotkeyBoundColor()
+    EnsureHotkeyStyleCache()
+    return hotkeyStyle.r, hotkeyStyle.g, hotkeyStyle.b, hotkeyStyle.a
 end
 
 local function IsAdditionalBarHotkeyEnabled(buttonName)
@@ -144,44 +211,6 @@ local function NormalizeAdditionalHotkeyVisual(button, hotkey)
         local buttonScale = GetSafeEffectiveScale(button, referenceScale)
         hotkey:SetFont(font, size * (referenceScale / buttonScale), flags)
     end
-end
-
-local function ButtonHasActionForRangeIndicator(buttonName, button)
-    if not buttonName or not button then
-        return false
-    end
-
-    if buttonName:match('^ActionButton%d+$')
-        or buttonName:match('^MultiBarBottomLeftButton%d+$')
-        or buttonName:match('^MultiBarBottomRightButton%d+$')
-        or buttonName:match('^MultiBarRightButton%d+$')
-        or buttonName:match('^MultiBarLeftButton%d+$')
-        or buttonName:match('^BonusActionButton%d+$')
-        or buttonName:match('^VehicleMenuBarActionButton%d+$') then
-        return button.action and HasAction and HasAction(button.action)
-    end
-
-    local buttonIndex = (button.GetID and button:GetID()) or tonumber(buttonName:match('(%d+)$'))
-    if not buttonIndex then
-        return false
-    end
-
-    if buttonName:match('^ShapeshiftButton%d+$') and GetShapeshiftFormInfo then
-        local _, formName = GetShapeshiftFormInfo(buttonIndex)
-        return formName ~= nil
-    end
-
-    if buttonName:match('^PetActionButton%d+$') and GetPetActionInfo then
-        local name, _, texture = GetPetActionInfo(buttonIndex)
-        return name ~= nil or texture ~= nil
-    end
-
-    if buttonName:match('^PossessButton%d+$') and GetPossessInfo then
-        local texture, name = GetPossessInfo(buttonIndex)
-        return texture ~= nil or name ~= nil
-    end
-
-    return false
 end
 
 addon.buttons_iterator = function()
@@ -276,6 +305,13 @@ do
         { 'MOUSEWHEELUP', 'MU' },
         { 'MOUSEWHEELDOWN', 'MD' },
         { 'SPACE', 'BAR' },
+        -- ruRU spells the numpad out; KEY_NUMPAD1 above doesn't cover it.
+        { '0 (цифр. кл.)', 'N0' },
+        { '1 (цифр. кл.)', 'N1' },
+        { '2 (цифр. кл.)', 'N2' },
+        { '3 (цифр. кл.)', 'N3' },
+        { '4 (цифр. кл.)', 'N4' },
+        { '5 (цифр. кл.)', 'N5' },
     }
 
     -- returns formatted key for text.
@@ -316,10 +352,6 @@ local function actionbuttons_hotkey(button)
         hotkey:Hide()
         return
     end
-
-    hotkey:Show()
-
-    local currentHotkeyText = hotkey:GetText()
 
     local function ResolveBindingTextFromCommand(command)
         if not command or command == '' then return nil end
@@ -395,34 +427,31 @@ local function actionbuttons_hotkey(button)
         return ''
     end
 
+    -- Keep ● placeholder (hidden); wiping it on early login kills OnUpdate range dots until reload.
+    local nativeText = hotkey:GetText()
+    local isNativeRangeDot = RANGE_INDICATOR and nativeText == RANGE_INDICATOR
     local text = ResolveButtonHotkeyText()
-    local suppressRangeIndicator = GetTime and GetTime() < (ButtonsModule.rangeIndicatorSuppressedUntil or 0)
 
-    if RANGE_INDICATOR
-        and currentHotkeyText == RANGE_INDICATOR
-        and db.hotkey.range
-        and not suppressRangeIndicator
-        and ButtonHasActionForRangeIndicator(buttonName, button) then
-			hotkey:SetText(RANGE_INDICATOR)
-        hotkey:SetAlpha(1)
-	else
-        hotkey:SetAlpha(1)
-		
-		-- Use custom formatting system
-		local formattedText = GetKeyText(text)
-		hotkey:SetText(formattedText)
-		
-		if db.hotkey.font then
-			hotkey:SetFont(unpack(db.hotkey.font))
-		end
-		
-		hotkey:SetShadowOffset(-1.3, -1.1)
-		
-		if db.hotkey.shadow then
-			hotkey:SetShadowColor(unpack(db.hotkey.shadow))
-		end
-	end
+    hotkey:SetAlpha(1)
+    if isNativeRangeDot then
+        if db.hotkey.range then
+            hotkey:SetText(RANGE_INDICATOR)
+            hotkey:Hide()
+            if button.action and HasAction(button.action) then
+                button.rangeTimer = -1
+            end
+        else
+            hotkey:SetText('')
+            hotkey:Hide()
+        end
+    else
+        local formattedText = GetKeyText(text)
+        hotkey:SetText(formattedText)
+        hotkey:Show()
+        ApplyHotkeyBoundColor(hotkey)
+    end
 
+    ApplyHotkeyTypography(hotkey)
     NormalizeAdditionalHotkeyVisual(button, hotkey)
 end
 
@@ -606,6 +635,7 @@ local function additional_buttons(button)
 	normal:ClearAllPoints()
 	normal:SetPoint('TOPRIGHT', button, 2.2, 2.3)
 	normal:SetPoint('BOTTOMLEFT', button, -2.2, -2.2)
+	normal:SetDrawLayer('OVERLAY')
 
 	-- apply button textures
 	button:GetCheckedTexture():set_atlas('_ui-hud-actionbar-iconborder-checked')
@@ -624,8 +654,7 @@ local function additional_buttons(button)
 	if icon then
 		icon:ClearAllPoints()
 		icon:SetTexCoord(.05, .95, .05, .95)
-		icon:SetPoint('TOPRIGHT', button, 1, 1)
-		icon:SetPoint('BOTTOMLEFT', button, -1, -1)
+		icon:SetAllPoints(button)
 		icon:SetDrawLayer('BORDER')
 	end
 
@@ -643,6 +672,14 @@ local function additional_buttons(button)
 		hooksecurefunc(button, "SetNormalTexture", fix_texture)
 	end
 	button.background = setup_background(button, normal, false)
+
+	-- Apply the toggle now — waiting for the next RefreshButtons() pass flashes it visible first.
+	if button.background then
+		local db = GetButtonsConfig()
+		if db and db.only_actionbackground then
+			button.background:Hide()
+		end
+	end
 end
 
 -- ============================================================================
@@ -797,6 +834,8 @@ function addon.RefreshButtons()
         ButtonsModule.pendingRefresh = true
         return 
     end
+
+    UpdateHotkeyStyleCache()
     
     local db = GetButtonsConfig()
     if not db then return end
@@ -849,7 +888,30 @@ function addon.RefreshButtons()
         end
     end
 
+    -- buttons_iterator() only walks main/multi bars, so pet/stance/possess/extrabar need their own toggle pass.
+    local additionalBars = {
+        { prefix = 'PetActionButton', count = NUM_PET_ACTION_SLOTS },
+        { prefix = 'ShapeshiftButton', count = NUM_SHAPESHIFT_SLOTS },
+        { prefix = 'PossessButton', count = NUM_POSSESS_SLOTS },
+        { prefix = 'DragonUI_ExtraBarButton', count = 12 },
+    }
+    for _, bar in ipairs(additionalBars) do
+        for index = 1, bar.count do
+            local button = _G[bar.prefix .. index]
+            if button and button.background then
+                if db.only_actionbackground then
+                    button.background:Hide()
+                else
+                    button.background:Show()
+                end
+            end
+        end
+    end
+
     RefreshAdditionalBarHotkeys()
+    if addon.RefreshExtrabarMacroNames then
+        addon.RefreshExtrabarMacroNames()
+    end
 end
 
 -- ============================================================================
@@ -875,12 +937,10 @@ function addon.vehiclebuttons_template(skipCombatGuard)
     RefreshAdditionalBarHotkeys()
 end
 
-function addon.RefreshAllHotkeys(suppressRangeIndicator)
+function addon.RefreshAllHotkeys()
     if not IsModuleEnabled() then return end
 
-    if suppressRangeIndicator and GetTime then
-        ButtonsModule.rangeIndicatorSuppressedUntil = GetTime() + 0.35
-    end
+    UpdateHotkeyStyleCache()
 
     for button in addon.buttons_iterator() do
         if button then
@@ -889,6 +949,17 @@ function addon.RefreshAllHotkeys(suppressRangeIndicator)
     end
 
     RefreshAdditionalBarHotkeys()
+end
+
+function addon.RefreshHotkeyStyle()
+    if IsModuleEnabled() then
+        addon.RefreshAllHotkeys()
+    else
+        UpdateHotkeyStyleCache()
+    end
+    if addon.RefreshExtrabarHotkeys then
+        addon.RefreshExtrabarHotkeys()
+    end
 end
 
 function addon.SetKeybindVisualMode(active)
@@ -982,6 +1053,22 @@ local function SetupHooks()
             if button then
                 actionbuttons_hotkey(button)
             end
+        end)
+    end
+
+    -- Blizzard ActionButton_OnUpdate paints in-range gray; reassert custom color only when needed.
+    if type(_G.ActionButton_OnUpdate) == 'function' then
+        hooksecurefunc('ActionButton_OnUpdate', function(self)
+            if not hotkeyStyle.recolor or not IsModuleEnabled() or not self then return end
+            local name = self:GetName()
+            if not name then return end
+            local hotkey = _G[name .. 'HotKey']
+            if not hotkey or not hotkey:IsShown() then return end
+            local text = hotkey:GetText()
+            if not text or text == '' or text == RANGE_INDICATOR then return end
+            -- Keep Blizzard OOR red; IsActionInRange(0) matches ActionButton.lua range branch.
+            if IsActionInRange(self.action) == 0 then return end
+            hotkey:SetVertexColor(hotkeyStyle.r, hotkeyStyle.g, hotkeyStyle.b, hotkeyStyle.a)
         end)
     end
 
@@ -1079,6 +1166,19 @@ local function Initialize()
         ApplyButtonStyling()
         SetupHooks()
     end
+
+    if addon.db and addon.db.RegisterCallback then
+        local function OnProfileChanged()
+            hotkeyStyle.ready = false
+            hotkeyStyle.recolor = false
+            if IsModuleEnabled() then
+                addon.RefreshAllHotkeys()
+            end
+        end
+        addon.db.RegisterCallback(ButtonsModule, "OnProfileChanged", OnProfileChanged)
+        addon.db.RegisterCallback(ButtonsModule, "OnProfileCopied", OnProfileChanged)
+        addon.db.RegisterCallback(ButtonsModule, "OnProfileReset", OnProfileChanged)
+    end
     
     ButtonsModule.initialized = true
 end
@@ -1119,7 +1219,7 @@ initFrame:SetScript("OnEvent", function(self, event, addonName)
     elseif event == "UPDATE_BINDINGS" then
         -- ORIGINAL PATTERN: Update hotkeys when bindings change
         if IsModuleEnabled() then
-            addon.RefreshAllHotkeys(true)
+            addon.RefreshAllHotkeys()
         end
     end
 end)

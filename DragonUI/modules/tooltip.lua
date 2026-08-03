@@ -57,10 +57,7 @@ local FACTION_COLORS = {
 -- ============================================================================
 
 local HEALTHBAR_HEIGHT = 6
-local HEALTHBAR_PADDING = -5  -- space between text and bar
-local HEALTHBAR_BOTTOM_PAD = 8  -- space between bar and tooltip bottom edge
-local HEALTHBAR_TOTAL = HEALTHBAR_HEIGHT + HEALTHBAR_PADDING + HEALTHBAR_BOTTOM_PAD
-local HEALTHBAR_SINGLE_LINE_EXTRA = 4 -- extra gap when tooltip only has a name line
+local HEALTHBAR_BOTTOM_PAD = 10  -- space between bar and tooltip bottom edge
 local TOOLTIP_WIDGET_ANCHOR = "BOTTOMRIGHT"
 local TOOLTIP_WIDGET_POSX = -90
 local TOOLTIP_WIDGET_POSY = 100
@@ -94,28 +91,23 @@ local function StyleHealthBar()
     TooltipModule.healthBarStyled = true
 end
 
--- Extend tooltip height to make room for the health bar inside the border.
--- Uses a one-frame OnUpdate delay so the resize applies AFTER Blizzard's
--- internal layout pass (which can override an immediate SetHeight).
-local function AdjustTooltipForHealthBar(tooltip)
-    if not tooltip or not GameTooltipStatusBar then return end
-    if not GameTooltipStatusBar:IsShown() then return end
-    if tooltip.__DragonUI_adjustPending then return end
+-- Same trick Blizzard's own GameTooltip_ShowStatusBar uses: a real blank AddLine, so native auto-height covers it.
+local function ReserveHealthBarLine()
+    if not GameTooltipStatusBar or not GameTooltipStatusBar:IsShown() then return end
+    GameTooltip:AddLine(" ")
+    GameTooltip:Show()
+end
 
-    tooltip.__DragonUI_adjustPending = true
-    local orig = tooltip:GetScript("OnUpdate")
-    tooltip:SetScript("OnUpdate", function(self, elapsed)
-        -- Restore original OnUpdate first
-        self:SetScript("OnUpdate", orig)
-        self.__DragonUI_adjustPending = false
-        -- Now extend height — Blizzard's layout is done at this point
-        local extra = 0
-        if (self:NumLines() or 0) <= 1 then
-            extra = HEALTHBAR_SINGLE_LINE_EXTRA
-        end
-        local h = self:GetHeight()
-        self:SetHeight(h + HEALTHBAR_TOTAL + extra)
-    end)
+-- Deferred one frame so it runs after every other addon's OnTooltipSetUnit hook (e.g. idWoW) has added its lines.
+local reserveRunner = CreateFrame("Frame")
+reserveRunner:Hide()
+reserveRunner:SetScript("OnUpdate", function(self)
+    self:Hide()
+    ReserveHealthBarLine()
+end)
+
+local function AdjustTooltipForHealthBar()
+    reserveRunner:Show()
 end
 
 -- ============================================================================
@@ -396,6 +388,117 @@ local function EnsureTooltipAnchorHook()
 end
 
 -- ============================================================================
+-- AURA SOURCE (caster name on buff/debuff tooltips)
+-- ============================================================================
+
+local function ShouldShowAuraSource()
+    if not IsModuleEnabled() then
+        return false
+    end
+    local cfg = GetModuleConfig()
+    return not cfg or cfg.show_aura_source ~= false
+end
+
+local function RGBToHex(r, g, b)
+    return string.format("|cff%02x%02x%02x",
+        math.floor((r or 1) * 255 + 0.5),
+        math.floor((g or 1) * 255 + 0.5),
+        math.floor((b or 1) * 255 + 0.5))
+end
+
+local AURA_ID_LABEL = _G.ID or "ID"
+local AURA_SOURCE_FALLBACK_COLOR = { r = 1, g = 1, b = 1 }
+
+local function AuraSourceAlreadyShown(tt, spellId)
+    if not spellId then
+        return false
+    end
+    local needle = tostring(spellId)
+    for i = 1, tt:NumLines() do
+        local left = _G["GameTooltipTextLeft" .. i]
+        local text = left and left:GetText()
+        if text and text:find(needle, 1, true) and text:find(AURA_ID_LABEL, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Returns UnitAura's 8th..11th values: unitCaster, isStealable, shouldConsolidate, spellId.
+local function GetAuraCasterAndSpellId(unit, index, filter)
+    if filter == "HARMFUL" then
+        return select(8, UnitDebuff(unit, index))
+    elseif filter == "HELPFUL" then
+        return select(8, UnitBuff(unit, index))
+    end
+    return select(8, UnitAura(unit, index, filter))
+end
+
+local function AddAuraSourceInfo(tt, unit, index, filter)
+    if not ShouldShowAuraSource() or not unit or not index then
+        return
+    end
+
+    local caster, _, _, spellId = GetAuraCasterAndSpellId(unit, index, filter)
+
+    if AuraSourceAlreadyShown(tt, spellId) then
+        return
+    end
+
+    local leftText
+    if spellId then
+        leftText = string.format("|cFFCA3C3C%s|r %d", AURA_ID_LABEL, spellId)
+    end
+
+    local rightText
+    if caster then
+        local name = UnitName(caster)
+        if name then
+            local _, class = UnitClass(caster)
+            local color = (class and CLASS_COLORS[class]) or AURA_SOURCE_FALLBACK_COLOR
+            rightText = RGBToHex(color.r, color.g, color.b) .. name
+        end
+    end
+
+    if leftText and rightText then
+        tt:AddDoubleLine(leftText, rightText)
+        tt:Show()
+    elseif leftText then
+        tt:AddLine(leftText)
+        tt:Show()
+    elseif rightText then
+        tt:AddLine(rightText)
+        tt:Show()
+    end
+end
+
+local function HookAuraTooltips()
+    if TooltipModule.hooks["AuraSource"] then
+        return
+    end
+
+    if GameTooltip.SetUnitBuff then
+        hooksecurefunc(GameTooltip, "SetUnitBuff", function(self, unit, index)
+            AddAuraSourceInfo(self, unit, index, "HELPFUL")
+        end)
+    end
+
+    if GameTooltip.SetUnitDebuff then
+        hooksecurefunc(GameTooltip, "SetUnitDebuff", function(self, unit, index)
+            AddAuraSourceInfo(self, unit, index, "HARMFUL")
+        end)
+    end
+
+    if GameTooltip.SetUnitAura then
+        hooksecurefunc(GameTooltip, "SetUnitAura", function(self, unit, index, filter)
+            AddAuraSourceInfo(self, unit, index, filter)
+        end)
+    end
+
+    TooltipModule.hooks["AuraSource"] = true
+end
+
+-- ============================================================================
 -- APPLY / RESTORE SYSTEM
 -- ============================================================================
 
@@ -405,6 +508,7 @@ local function ApplyTooltipSystem()
     EnsureTooltipAnchorHook()
     EnsureTooltipWidget()
     ApplyTooltipWidgetPosition()
+    HookAuraTooltips()
 
     -- Hook GameTooltip:SetUnit
     if not TooltipModule.hooks["SetUnit"] then
@@ -419,10 +523,29 @@ local function ApplyTooltipSystem()
                 -- Color name AFTER Show() — calling Show() can reset text colors
                 ColorTooltipName(unit)
                 -- Extend tooltip to fit health bar inside the border
-                AdjustTooltipForHealthBar(self)
+                AdjustTooltipForHealthBar()
             end
         end)
         TooltipModule.hooks["SetUnit"] = true
+    end
+
+    -- UnitFrame_UpdateTooltip recolors TextLeft1 with GameTooltip_UnitColor after SetUnit.
+    if not TooltipModule.hooks["UnitFrameTooltip"] then
+        hooksecurefunc("UnitFrame_UpdateTooltip", function(self)
+            if not IsModuleEnabled() or not self or not self.unit then return end
+            ColorTooltipName(self.unit)
+        end)
+        TooltipModule.hooks["UnitFrameTooltip"] = true
+    end
+
+    -- GameObject tooltips (e.g. BG doors) never call SetUnit, so OnTooltipSetUnit never fires for them — hook the bar's own OnShow instead.
+    if not TooltipModule.hooks["BarShow"] then
+        GameTooltipStatusBar:HookScript("OnShow", function(self)
+            if not IsModuleEnabled() then return end
+            StyleHealthBar()
+            AdjustTooltipForHealthBar()
+        end)
+        TooltipModule.hooks["BarShow"] = true
     end
 
     -- Hook GameTooltipStatusBar OnValueChanged to persist class color through
@@ -441,6 +564,7 @@ local function ApplyTooltipSystem()
     -- Hook OnTooltipCleared to reset state
     if not TooltipModule.hooks["OnCleared"] then
         GameTooltip:HookScript("OnTooltipCleared", function(self)
+            if not IsModuleEnabled() then return end
             -- Reset border color
             self:SetBackdropBorderColor(1, 1, 1)
             -- Clear cached bar color so OnValueChanged stops overriding
@@ -504,9 +628,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         -- Register profile callbacks
         addon:After(0.5, function()
             if addon.db and addon.db.RegisterCallback then
-                addon.db.RegisterCallback(addon, "OnProfileChanged", OnProfileChanged)
-                addon.db.RegisterCallback(addon, "OnProfileCopied", OnProfileChanged)
-                addon.db.RegisterCallback(addon, "OnProfileReset", OnProfileChanged)
+                addon.db.RegisterCallback(TooltipModule, "OnProfileChanged", OnProfileChanged)
+                addon.db.RegisterCallback(TooltipModule, "OnProfileCopied", OnProfileChanged)
+                addon.db.RegisterCallback(TooltipModule, "OnProfileReset", OnProfileChanged)
             end
         end)
 

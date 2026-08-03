@@ -267,10 +267,6 @@ local function IsCompactPartyFramesEnabled()
 end
 
 local function IsHidePartyInRaidEnabled()
-    if CUF_CVar and CUF_CVar.GetCVarBool then
-        return CUF_CVar:GetCVarBool("hidePartyInRaid") and true or false
-    end
-
     if GetCVarBool then
         return GetCVarBool("hidePartyInRaid") and true or false
     end
@@ -464,7 +460,9 @@ local function UpdatePartyHealthBarColor(partyIndex)
         return
     end
 
-    local healthbar = _G['PartyMemberFrame' .. partyIndex .. 'HealthBar']
+    -- Color our own overlay bar, never Blizzard's native bar (touching it taints it).
+    local frame = _G['PartyMemberFrame' .. partyIndex]
+    local healthbar = frame and frame.DragonUI_HealthBar
     if not healthbar then
         return
     end
@@ -534,6 +532,81 @@ end
 -- DYNAMIC CLIPPING SYSTEM
 -- ===============================================================
 
+-- Create our own health StatusBar overlaid on Blizzard's native one. We never touch
+-- the native bar (that taints it and breaks its in-combat/vehicle Show/Hide); instead
+-- we read its value via the SetValue hook and mirror it onto our own bar.
+local function EnsureDragonHealthBar(frame)
+    if not frame or frame.DragonUI_HealthBar then
+        return frame and frame.DragonUI_HealthBar
+    end
+
+    local native = _G[frame:GetName() .. 'HealthBar']
+    if not native then
+        return nil
+    end
+
+    local db = CreateFrame("StatusBar", nil, frame)
+    -- Good custom geometry (native bar is hidden below via SetAlpha, see test below).
+    db:SetSize(71, 10)
+    db:SetPoint('TOPLEFT', frame, 'TOPLEFT', 44, -19)
+    db:SetFrameLevel(native:GetFrameLevel() + 1)
+    db:SetStatusBarTexture(TEXTURES.healthBar)
+    db:SetStatusBarColor(1, 1, 1, 1)
+    frame.DragonUI_HealthBar = db
+
+    -- Hide the native bar under our overlay; SetAlpha doesn't taint the frame (reskinning it does).
+    native:SetAlpha(0)
+
+    return db
+end
+
+-- Clip/color logic for a party health bar. `self` is Blizzard's native bar (from the
+-- SetValue hook or a direct call) and is only READ; all writes go to our own overlay.
+local function ApplyHealthBarClipping(self, value)
+    local frame = self:GetParent()
+    if not frame then
+        return
+    end
+    local db = EnsureDragonHealthBar(frame)
+    if not db then
+        return
+    end
+    local frameIndex = frame:GetID()
+    -- NOTE: Do NOT early return on !UnitExists — during ghost/spirit release
+    -- UnitExists can briefly return false, leaving texture stuck invisible
+
+    -- Mirror the native bar's range/value onto our own (read-only on the native bar).
+    local min, max = self:GetMinMaxValues()
+    local current = value or self:GetValue()
+    db:SetMinMaxValues(min, max)
+    db:SetValue(current or 0)
+
+    local texture = db:GetStatusBarTexture()
+    if not texture then
+        return
+    end
+
+    -- If disconnected, show full bar in gray (Blizzard native behavior)
+    if frame.DragonUI_Disconnected then
+        texture:SetTexCoord(0, 1, 0, 1)
+        db:SetStatusBarColor(0.5, 0.5, 0.5, 1)
+        return
+    end
+
+    -- Apply class color first (safe if unit doesn't exist — checks internally)
+    UpdatePartyHealthBarColor(frameIndex)
+
+    -- Dynamic clipping: Only show the filled part of the texture
+    if max > 0 and current then
+        -- Clamp to [0.001, 1] — max=1 can happen during BG loading/phasing
+        -- while current holds the real health value, producing TexCoord out of range
+        local percentage = math.min(math.max(current / max, 0.001), 1)
+        texture:SetTexCoord(0, percentage, 0, 1)
+    else
+        texture:SetTexCoord(0, 1, 0, 1)
+    end
+end
+
 -- Setup dynamic texture clipping for health bars
 local function SetupHealthBarClipping(frame)
     if not frame then
@@ -541,47 +614,96 @@ local function SetupHealthBarClipping(frame)
     end
 
     local healthbar = _G[frame:GetName() .. 'HealthBar']
-    if not healthbar or healthbar.DragonUI_ClippingSetup then
+    if not healthbar then
         return
     end
 
-    -- Hook SetValue for dynamic clipping and class color
-    hooksecurefunc(healthbar, "SetValue", function(self, value)
-        local frameIndex = frame:GetID()
-        local unit = "party" .. frameIndex
-        -- NOTE: Do NOT early return on !UnitExists — during ghost/spirit release
-        -- UnitExists can briefly return false, leaving texture stuck invisible
+    EnsureDragonHealthBar(frame)
 
-        local texture = self:GetStatusBarTexture()
-        if not texture then
-            return
-        end
+    if not healthbar.DragonUI_ClippingSetup then
+        -- Read-only hook: Blizzard's SetValue drives our overlay, native bar untouched.
+        hooksecurefunc(healthbar, "SetValue", ApplyHealthBarClipping)
+        healthbar.DragonUI_ClippingSetup = true
+        ApplyHealthBarClipping(healthbar, healthbar:GetValue()) -- seed initial fill
+    end
+end
 
-        -- If disconnected, show full bar in gray (Blizzard native behavior)
-        if frame.DragonUI_Disconnected then
-            texture:SetTexCoord(0, 1, 0, 1)
-            self:SetStatusBarColor(0.5, 0.5, 0.5, 1)
-            return
-        end
+-- Create our own mana StatusBar overlaid on Blizzard's native one (see health bar rationale).
+local function EnsureDragonManaBar(frame)
+    if not frame or frame.DragonUI_ManaBar then
+        return frame and frame.DragonUI_ManaBar
+    end
 
-        -- Apply class color first (safe if unit doesn't exist — checks internally)
-        UpdatePartyHealthBarColor(frameIndex)
+    local native = _G[frame:GetName() .. 'ManaBar']
+    if not native then
+        return nil
+    end
 
-        -- Dynamic clipping: Only show the filled part of the texture
-        local min, max = self:GetMinMaxValues()
-        local current = value or self:GetValue()
+    local db = CreateFrame("StatusBar", nil, frame)
+    db:SetSize(74, 6.5)
+    db:SetPoint('TOPLEFT', frame, 'TOPLEFT', 41, -30.5)
+    db:SetFrameLevel(native:GetFrameLevel() + 1)
+    local initTex = GetPowerBarTexture("party" .. frame:GetID())
+    db:SetStatusBarTexture(initTex)
+    db.__dui_powerTex = initTex
+    db:SetStatusBarColor(1, 1, 1, 1)
+    frame.DragonUI_ManaBar = db
 
-        if max > 0 and current then
-            -- Clamp to [0.001, 1] — max=1 can happen during BG loading/phasing
-            -- while current holds the real health value, producing TexCoord out of range
-            local percentage = math.min(math.max(current / max, 0.001), 1)
-            texture:SetTexCoord(0, percentage, 0, 1)
-        else
-            texture:SetTexCoord(0, 1, 0, 1)
-        end
-    end)
+    -- Hide the native bar under our overlay; SetAlpha doesn't taint (see health bar).
+    native:SetAlpha(0)
 
-    healthbar.DragonUI_ClippingSetup = true
+    return db
+end
+
+-- Clip/texture logic for a party mana bar. `self` is Blizzard's native bar (read-only);
+-- all writes go to our own overlay.
+local function ApplyManaBarClipping(self, value)
+    local frame = self:GetParent()
+    if not frame then
+        return
+    end
+    local db = EnsureDragonManaBar(frame)
+    if not db then
+        return
+    end
+    local unit = "party" .. frame:GetID()
+    -- NOTE: Do NOT early return on !UnitExists — see health bar comment
+
+    -- If disconnected, mana bar is hidden (alpha=0), skip all processing
+    if frame.DragonUI_Disconnected then
+        return
+    end
+
+    -- Mirror the native bar's range/value onto our own (read-only on the native bar).
+    local min, max = self:GetMinMaxValues()
+    local current = value or self:GetValue()
+    db:SetMinMaxValues(min, max)
+    db:SetValue(current or 0)
+
+    -- Power-type texture (energy, rage, etc.) — only reassign when it actually changes.
+    -- SetStatusBarTexture every SetValue rebuilds the texture region and caused a
+    -- periodic hitch (energy ticks ~every 2s drove it constantly).
+    local powerTexture = GetPowerBarTexture(unit)
+    if db.__dui_powerTex ~= powerTexture then
+        db:SetStatusBarTexture(powerTexture)
+        db.__dui_powerTex = powerTexture
+    end
+
+    local texture = db:GetStatusBarTexture()
+    if not texture then
+        return
+    end
+
+    if max > 0 and current then
+        -- Clamp to [0.001, 1] — max=1 can happen during BG loading/phasing
+        -- while current holds the real mana value, producing TexCoord out of range
+        local percentage = math.min(math.max(current / max, 0.001), 1)
+        texture:SetTexCoord(0, percentage, 0, 1)
+    else
+        texture:SetTexCoord(0, 1, 0, 1)
+    end
+
+    texture:SetVertexColor(1, 1, 1, 1)
 end
 
 -- Setup dynamic texture clipping for mana bars
@@ -591,44 +713,18 @@ local function SetupManaBarClipping(frame)
     end
 
     local manabar = _G[frame:GetName() .. 'ManaBar']
-    if not manabar or manabar.DragonUI_ClippingSetup then
+    if not manabar then
         return
     end
 
-    -- Hook SetValue for dynamic clipping
-    hooksecurefunc(manabar, "SetValue", function(self, value)
-        local unit = "party" .. frame:GetID()
-        -- NOTE: Do NOT early return on !UnitExists — see health bar comment
+    EnsureDragonManaBar(frame)
 
-        local texture = self:GetStatusBarTexture()
-        if not texture then
-            return
-        end
-
-        -- If disconnected, mana bar is hidden (alpha=0), skip all processing
-        if frame.DragonUI_Disconnected then
-            return
-        end
-
-        local min, max = self:GetMinMaxValues()
-        local current = value or self:GetValue()
-
-        if max > 0 and current then
-            -- Clamp to [0.001, 1] — max=1 can happen during BG loading/phasing
-            -- while current holds the real mana value, producing TexCoord out of range
-            local percentage = math.min(math.max(current / max, 0.001), 1)
-            texture:SetTexCoord(0, percentage, 0, 1)
-        else
-            texture:SetTexCoord(0, 1, 0, 1)
-        end
-
-        -- Update texture based on power type
-        local powerTexture = GetPowerBarTexture(unit)
-        texture:SetTexture(powerTexture)
-        texture:SetVertexColor(1, 1, 1, 1)
-    end)
-
-    manabar.DragonUI_ClippingSetup = true
+    if not manabar.DragonUI_ClippingSetup then
+        -- Read-only hook: Blizzard's SetValue drives our overlay, native bar untouched.
+        hooksecurefunc(manabar, "SetValue", ApplyManaBarClipping)
+        manabar.DragonUI_ClippingSetup = true
+        ApplyManaBarClipping(manabar, manabar:GetValue()) -- seed initial fill
+    end
 end
 
 -- ===============================================================
@@ -922,8 +1018,8 @@ end
 local function CreateHoverFrames(frame, frameIndex)
     if not frame or frame.DragonUI_HoverFrames then return end
     
-    local healthBar = _G[frame:GetName() .. 'HealthBar']
-    local manaBar = _G[frame:GetName() .. 'ManaBar']
+    local healthBar = EnsureDragonHealthBar(frame) or _G[frame:GetName() .. 'HealthBar']
+    local manaBar = EnsureDragonManaBar(frame) or _G[frame:GetName() .. 'ManaBar']
     local unitToken = "party" .. frameIndex
     
     -- Create hover frame for health bar
@@ -1029,7 +1125,8 @@ CreateCustomTexts = function(frame)
     end
 
     -- Create custom health text elements (dual system for "both" format)
-    local healthBar = _G[frame:GetName() .. 'HealthBar']
+    -- Anchor to our overlay bar (not Blizzard's), matching where the fill is drawn.
+    local healthBar = EnsureDragonHealthBar(frame) or _G[frame:GetName() .. 'HealthBar']
     if healthBar then
         -- Center text for simple formats (numeric, percentage, formatted)
         if not frame.DragonUI_HealthText then
@@ -1061,7 +1158,8 @@ CreateCustomTexts = function(frame)
     end
 
     -- Create custom mana text elements (dual system for "both" format)
-    local manaBar = _G[frame:GetName() .. 'ManaBar']
+    -- Anchor to our overlay bar (not Blizzard's), matching where the fill is drawn.
+    local manaBar = EnsureDragonManaBar(frame) or _G[frame:GetName() .. 'ManaBar']
     if manaBar then
         -- Center text for simple formats
         if not frame.DragonUI_ManaText then
@@ -1116,7 +1214,7 @@ local function UpdatePartyColors(frame)
         return
     end
 
-    local healthbar = _G[frame:GetName() .. 'HealthBar']
+    local healthbar = frame.DragonUI_HealthBar
     if healthbar and settings.classcolor then
         local r, g, b = GetClassColor(unit)
         healthbar:SetStatusBarColor(r, g, b)
@@ -1134,10 +1232,13 @@ local function UpdateManaBarTexture(frame)
         return
     end
 
-    local manabar = _G[frame:GetName() .. 'ManaBar']
+    local manabar = EnsureDragonManaBar(frame)
     if manabar then
         local powerTexture = GetPowerBarTexture(unit)
-        manabar:SetStatusBarTexture(powerTexture)
+        if manabar.__dui_powerTex ~= powerTexture then
+            manabar:SetStatusBarTexture(powerTexture)
+            manabar.__dui_powerTex = powerTexture
+        end
         manabar:SetStatusBarColor(1, 1, 1, 1) -- Keep white
     end
 end
@@ -1221,37 +1322,19 @@ local function StylePartyFrames()
                 portrait.DragonUI_SetPointHooked = true
             end
 
-            -- Health bar
+            -- Health bar: native bar left untouched (reskinning it taints it); our own
+            -- overlay bar is created and driven by SetupHealthBarClipping.
             local healthbar = _G[frame:GetName() .. 'HealthBar']
             if healthbar and not InCombatLockdown() then
-                healthbar:SetStatusBarTexture(TEXTURES.healthBar)
-                healthbar:SetSize(71, 10)
-                healthbar:ClearAllPoints()
-                healthbar:SetPoint('TOPLEFT', 44, -19)
-                healthbar:SetFrameLevel(1)  -- Lower level so border texture can appear above
-                healthbar:SetStatusBarColor(1, 1, 1, 1)
-
-                -- Configure dynamic clipping with class color
                 SetupHealthBarClipping(frame)
-
-                -- Apply initial class color
                 UpdatePartyHealthBarColor(i)
             end
 
-            -- Replace mana bar setup (lines 192-199)
+            -- Mana bar: native bar left untouched (reskinning it taints it); our own
+            -- overlay bar is created and driven by SetupManaBarClipping.
             local manabar = _G[frame:GetName() .. 'ManaBar']
             if manabar and not InCombatLockdown() then
-                manabar:SetStatusBarTexture(TEXTURES.manaBar)
-                manabar:SetSize(74, 6.5)
-                manabar:ClearAllPoints()
-                manabar:SetPoint('TOPLEFT', 41, -30.5)
-                manabar:SetFrameLevel(1)  -- Lower level so border texture can appear above
-                manabar:SetStatusBarColor(1, 1, 1, 1)
-
-                -- Configure dynamic clipping
                 SetupManaBarClipping(frame)
-
-                -- Apply correct power type texture (energy, rage, etc.)
                 UpdateManaBarTexture(frame)
             end
 
@@ -1425,8 +1508,8 @@ local function UpdateDisconnectedState(frame)
         -- Member left or slot is empty: clear stale disconnected state.
         frame.DragonUI_Disconnected = false
 
-        local healthbar = _G[frame:GetName() .. 'HealthBar']
-        local manabar = _G[frame:GetName() .. 'ManaBar']
+        local healthbar = EnsureDragonHealthBar(frame)
+        local manabar = EnsureDragonManaBar(frame)
         local portrait = _G[frame:GetName() .. 'Portrait']
         local name = _G[frame:GetName() .. 'Name']
 
@@ -1447,8 +1530,8 @@ local function UpdateDisconnectedState(frame)
     end
 
     local isConnected = UnitIsConnected(unit)
-    local healthbar = _G[frame:GetName() .. 'HealthBar']
-    local manabar = _G[frame:GetName() .. 'ManaBar']
+    local healthbar = EnsureDragonHealthBar(frame)
+    local manabar = EnsureDragonManaBar(frame)
     local portrait = _G[frame:GetName() .. 'Portrait']
     local name = _G[frame:GetName() .. 'Name']
 
@@ -1571,6 +1654,10 @@ local function RefreshSinglePartyFrameVisibility(index)
     else
         frame:Hide()
     end
+
+    if addon.VisibilityFade then
+        addon.VisibilityFade.Update("party" .. index)
+    end
 end
 
 local function RefreshAllPartyFrameVisibility()
@@ -1643,7 +1730,6 @@ local function SetupPartyHooks()
             end
 
             if manabar then
-                manabar:SetStatusBarColor(1, 1, 1, 1)
                 SetupManaBarClipping(frame)
             end
 
@@ -1699,62 +1785,28 @@ local function SetupPartyHooks()
                 if healthbar then
                     UpdateHealthText(healthbar, false)
                 end
-            elseif event == "UNIT_POWER" or event == "UNIT_MAXPOWER" or event == "UNIT_DISPLAYPOWER" then
-                -- Update power bar texture on power type change (e.g. druid shifting)
-                UpdateManaBarTexture(frame)
-                local manabar = _G[frame:GetName() .. 'ManaBar']
-                if manabar then
-                    UpdateManaText(manabar, false)
-                end
             end
         end
     end)
 
     -- Main hook for class color (simplified)
     hooksecurefunc("UnitFrameHealthBar_Update", function(statusbar, unit)
-        if statusbar and statusbar:GetName() and statusbar:GetName():find('PartyMemberFrame') then
-            -- Only maintain dynamic clipping - Ace3 handles color
-            local texture = statusbar:GetStatusBarTexture()
-            if texture then
-                local min, max = statusbar:GetMinMaxValues()
-                local current = statusbar:GetValue()
-                if max > 0 and current then
-                    local percentage = math.min(math.max(current / max, 0.001), 1)
-                    texture:SetTexCoord(0, percentage, 0, 1)
-                end
-            end
-            
-            -- Update health text with DragonUI formatting
+        if statusbar and statusbar:GetName() and statusbar:GetName():match("^PartyMemberFrame%dHealthBar$") then
+            -- Drive our overlay from the native bar (read-only); never clip the native texture.
+            ApplyHealthBarClipping(statusbar, statusbar:GetValue())
             UpdateHealthText(statusbar, false)
         end
     end)
 
     -- Hook for mana bar (without touching health)
     hooksecurefunc("UnitFrameManaBar_Update", function(statusbar, unit)
-        if statusbar and statusbar:GetName() and statusbar:GetName():find('PartyMemberFrame') then
-            statusbar:SetStatusBarColor(1, 1, 1, 1) -- Only mana in white
-
-            local frameName = statusbar:GetParent():GetName()
-            local frameIndex = frameName:match("PartyMemberFrame(%d+)")
-            if frameIndex then
-                local partyUnit = "party" .. frameIndex
-                local powerTexture = GetPowerBarTexture(partyUnit)
-                statusbar:SetStatusBarTexture(powerTexture)
-
-                -- Maintain dynamic clipping
-                local texture = statusbar:GetStatusBarTexture()
-                if texture then
-                    local min, max = statusbar:GetMinMaxValues()
-                    local current = statusbar:GetValue()
-                    if max > 0 and current then
-                        local percentage = math.min(math.max(current / max, 0.001), 1)
-                        texture:SetTexCoord(0, percentage, 0, 1)
-                        texture:SetTexture(powerTexture)
-                    end
-                end
-            end
-            
-            -- Update mana text with DragonUI formatting
+        local id = statusbar and statusbar:GetName()
+            and statusbar:GetName():match("^PartyMemberFrame(%d)ManaBar$")
+        if id then
+            -- Only path that sees power changes: PartyMemberFrame itself registers no power event.
+            UpdateManaBarTexture(_G['PartyMemberFrame' .. id])
+            -- Drive our overlay from the native bar (read-only); never touch the native texture.
+            ApplyManaBarClipping(statusbar, statusbar:GetValue())
             UpdateManaText(statusbar, false)
         end
     end)
@@ -1816,17 +1868,15 @@ local function SetupPartyHooks()
         -- SetValue/UnitFrameHealthBar_Update hooks have already executed,
         -- ensuring the gray visuals stick.
         UpdateDisconnectedState(frame)
-        
-        -- Force bars to re-run their SetValue hooks with the flag now set
+
+        -- Re-run clip logic directly, not via :SetValue() — that cascade taints Show() calls mid-combat.
         local healthbar = _G[frame:GetName() .. 'HealthBar']
         local manabar = _G[frame:GetName() .. 'ManaBar']
         if healthbar then
-            local val = healthbar:GetValue()
-            healthbar:SetValue(val)
+            ApplyHealthBarClipping(healthbar, healthbar:GetValue())
         end
         if manabar then
-            local val = manabar:GetValue()
-            manabar:SetValue(val)
+            ApplyManaBarClipping(manabar, manabar:GetValue())
         end
     end)
 end
@@ -1881,6 +1931,19 @@ function PartyFrames:UpdateSettings()
             -- Re-apply disconnected state AFTER styling (gray name, hidden texts, etc.)
             -- StylePartyFrames resets name color to yellow, so this must come last
             UpdateDisconnectedState(frame)
+
+            if addon.VisibilityFade then
+                local hoverFrames = { frame }
+                if frame.DragonUI_HealthHover then table.insert(hoverFrames, frame.DragonUI_HealthHover) end
+                if frame.DragonUI_ManaHover then table.insert(hoverFrames, frame.DragonUI_ManaHover) end
+                addon.VisibilityFade.Register("party" .. i, frame, {
+                    dbTable = function() return addon.UF.GetConfig("party") end,
+                    hoverFrames = hoverFrames,
+                    clickThrough = true,
+                    shouldManage = ShouldPartyFramesBeVisible,
+                })
+                addon.VisibilityFade.Update("party" .. i)
+            end
         end
     end
 
@@ -1971,16 +2034,14 @@ connectionFrame:SetScript("OnEvent", function(self, event)
         if frame then
             -- Set the flag FIRST so hooks respect it
             UpdateDisconnectedState(frame)
-            -- Force bars to re-run their SetValue hooks with the new flag
+            -- Re-run clip logic directly, not via :SetValue() — that cascade taints Show() calls mid-combat.
             local healthbar = _G[frame:GetName() .. 'HealthBar']
             local manabar = _G[frame:GetName() .. 'ManaBar']
             if healthbar then
-                local val = healthbar:GetValue()
-                healthbar:SetValue(val)
+                ApplyHealthBarClipping(healthbar, healthbar:GetValue())
             end
             if manabar then
-                local val = manabar:GetValue()
-                manabar:SetValue(val)
+                ApplyManaBarClipping(manabar, manabar:GetValue())
             end
         end
     end
@@ -1995,6 +2056,7 @@ end)
 
 local recoveryFrame = CreateFrame("Frame")
 recoveryFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")   -- Party composition changes (join/leave/role swap)
+recoveryFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 recoveryFrame:RegisterEvent("PLAYER_ENTERING_WORLD")   -- Recovery after reload/zone transitions
 recoveryFrame:RegisterEvent("PLAYER_ALIVE")             -- Player resurrects (accept rez or spirit healer)
 recoveryFrame:RegisterEvent("PLAYER_UNGHOST")           -- Player returns from ghost form
@@ -2022,9 +2084,8 @@ recoveryFrame:SetScript("OnEvent", function(self, event, unit)
         return
     end
 
-    -- For PARTY_MEMBERS_CHANGED, refresh frame visibility for all party slots.
-    -- Uses CombatQueue to defer in combat (Show/Hide on secure frames causes taint).
-    if event == "PARTY_MEMBERS_CHANGED" then
+    -- Roster transitions can change protected visibility, so defer reconciliation in combat.
+    if event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
         -- Skip refresh while editor mode is active (test frames are intentionally shown)
         if addon.EditorMode and addon.EditorMode:IsActive() then
             return
@@ -2079,28 +2140,11 @@ recoveryFrame:SetScript("OnEvent", function(self, event, unit)
                 local healthbar = _G[frame:GetName() .. 'HealthBar']
                 local manabar = _G[frame:GetName() .. 'ManaBar']
                 if healthbar then
-                    -- Force re-clip with current values
-                    local texture = healthbar:GetStatusBarTexture()
-                    if texture then
-                        local _, max = healthbar:GetMinMaxValues()
-                        local current = healthbar:GetValue()
-                        if max > 0 and current then
-                            local percentage = math.min(math.max(current / max, 0.001), 1)
-                            texture:SetTexCoord(0, percentage, 0, 1)
-                        end
-                    end
+                    ApplyHealthBarClipping(healthbar, healthbar:GetValue())
                     UpdateHealthText(healthbar, false)
                 end
                 if manabar then
-                    local texture = manabar:GetStatusBarTexture()
-                    if texture then
-                        local _, max = manabar:GetMinMaxValues()
-                        local current = manabar:GetValue()
-                        if max > 0 and current then
-                            local percentage = math.min(math.max(current / max, 0.001), 1)
-                            texture:SetTexCoord(0, percentage, 0, 1)
-                        end
-                    end
+                    ApplyManaBarClipping(manabar, manabar:GetValue())
                     UpdateManaText(manabar, false)
                 end
             end
@@ -2118,27 +2162,11 @@ recoveryFrame:SetScript("OnEvent", function(self, event, unit)
             local healthbar = _G[frame:GetName() .. 'HealthBar']
             local manabar = _G[frame:GetName() .. 'ManaBar']
             if healthbar then
-                local texture = healthbar:GetStatusBarTexture()
-                if texture then
-                    local _, max = healthbar:GetMinMaxValues()
-                    local current = healthbar:GetValue()
-                    if max > 0 and current then
-                        local percentage = math.min(math.max(current / max, 0.001), 1)
-                        texture:SetTexCoord(0, percentage, 0, 1)
-                    end
-                end
+                ApplyHealthBarClipping(healthbar, healthbar:GetValue())
                 UpdateHealthText(healthbar, false)
             end
             if manabar then
-                local texture = manabar:GetStatusBarTexture()
-                if texture then
-                    local _, max = manabar:GetMinMaxValues()
-                    local current = manabar:GetValue()
-                    if max > 0 and current then
-                        local percentage = math.min(math.max(current / max, 0.001), 1)
-                        texture:SetTexCoord(0, percentage, 0, 1)
-                    end
-                end
+                ApplyManaBarClipping(manabar, manabar:GetValue())
                 UpdateManaText(manabar, false)
             end
             end -- if not DragonUI_Disconnected
@@ -2183,8 +2211,8 @@ if type(PartyMemberFrame_UpdateArt) == "function" then
         local frameIndex = frame:GetID()
         local healthbar = _G[frame:GetName() .. "HealthBar"]
         if healthbar then
-            healthbar:SetStatusBarTexture(TEXTURES.healthBar)
-            UpdatePartyHealthBarColor(frameIndex)
+            -- Refresh our overlay; never re-skin the native bar (that taints it).
+            ApplyHealthBarClipping(healthbar, healthbar:GetValue())
         end
 
         if frame.DragonUI_BorderFrame and frame.DragonUI_BorderFrame.texture then
@@ -2228,8 +2256,8 @@ if type(PartyMemberFrame_ToVehicleArt) == "function" then
         local frameIndex = frame:GetID()
         local healthbar = _G[frame:GetName() .. "HealthBar"]
         if healthbar then
-            healthbar:SetStatusBarTexture(TEXTURES.healthBar)
-            UpdatePartyHealthBarColor(frameIndex)
+            -- Refresh our overlay; never re-skin the native bar (that taints it).
+            ApplyHealthBarClipping(healthbar, healthbar:GetValue())
         end
 
         if frame.DragonUI_BorderFrame and frame.DragonUI_BorderFrame.texture then
@@ -2273,8 +2301,8 @@ if type(PartyMemberFrame_ToPlayerArt) == "function" then
         local frameIndex = frame:GetID()
         local healthbar = _G[frame:GetName() .. "HealthBar"]
         if healthbar then
-            healthbar:SetStatusBarTexture(TEXTURES.healthBar)
-            UpdatePartyHealthBarColor(frameIndex)
+            -- Refresh our overlay; never re-skin the native bar (that taints it).
+            ApplyHealthBarClipping(healthbar, healthbar:GetValue())
         end
 
         if frame.DragonUI_BorderFrame and frame.DragonUI_BorderFrame.texture then

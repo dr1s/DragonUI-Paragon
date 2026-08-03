@@ -33,8 +33,6 @@ L["Vehicle debug not available"] = "Depuración de vehículo no disponible"
 L["KeyBinding module not available"] = "Módulo de atajos de teclado no disponible"
 L["Unable to open configuration"] = "No se pudo abrir la configuración"
 L["Commands: /dragonui config, /dragonui edit"] = "Comandos: /dragonui config, /dragonui edit"
-L["Reset position: %s"] = "Posición restablecida: %s"
-L["All positions reset to defaults"] = "Todas las posiciones restablecidas a valores predeterminados"
 L["Editor mode enabled - Drag frames to reposition"] = "Modo editor activado - Arrastra los marcos para reposicionar"
 L["Editor mode disabled - Positions saved"] = "Modo editor desactivado - Posiciones guardadas"
 L["Minimap module restored to Blizzard defaults"] = "Módulo de minimapa restaurado a valores predeterminados de Blizzard"
@@ -48,7 +46,6 @@ L["Remaining: "] = "Restante: "
 L["Rested: "] = "Descanso: "
 
 -- Errors
-L["Error executing pending operation:"] = "Error al ejecutar operación pendiente:"
 L["Error -- Addon 'DragonUI_Options' not found or is disabled."] = "Error -- El addon 'DragonUI_Options' no se encontró o está desactivado."
 
 -- ============================================================================
@@ -61,7 +58,6 @@ L["/dragonui or /dui - Open configuration"] = "/dragonui o /dui - Abrir configur
 L["/dragonui config - Open configuration"] = "/dragonui config - Abrir configuración"
 L["/dragonui edit - Toggle editor mode (move UI elements)"] = "/dragonui edit - Cambiar modo editor (mover elementos de UI)"
 L["/dragonui reset - Reset all positions to defaults"] = "/dragonui reset - Restablecer todas las posiciones"
-L["/dragonui reset <name> - Reset specific mover"] = "/dragonui reset <nombre> - Restablecer posición específica"
 L["/dragonui status - Show module status"] = "/dragonui status - Mostrar estado de módulos"
 L["/dragonui kb - Toggle keybind mode"] = "/dragonui kb - Cambiar modo de atajos"
 L["/dragonui version - Show version info"] = "/dragonui version - Mostrar versión"
@@ -80,10 +76,8 @@ L["Target Frame"] = true
 L["Focus Frame"] = true
 L["Party Frames"] = true
 L["Cooldowns"] = true
-L["Registered Movers: "] = "Movedores registrados: "
 L["Editable Frames: "] = "Marcos editables: "
 L["DragonUI Version: "] = "Versión de DragonUI: "
-L["Use /dragonui edit to enter edit mode, then right-click frames to reset."] = "Usa /dragonui edit para entrar en modo edición, luego haz clic derecho en marcos para restablecer."
 
 -- ============================================================================
 -- EDITOR MODE
@@ -97,6 +91,36 @@ L["No"] = "No"
 L["UI elements have been repositioned. Reload UI to ensure all graphics display correctly?"] = "Los elementos de la interfaz han sido reposicionados. ¿Recargar la interfaz para que se muestren correctamente?"
 L["Reload Now"] = "Recargar Ahora"
 L["Later"] = "Más Tarde"
+
+-- Position presets (edit mode)
+L["Position Presets"] = "Preajustes de Posición"
+L["Position Preset"] = "Preajuste de Posición"
+L["Save"] = "Guardar"
+L["Import"] = "Importar"
+L["Cancel"] = "Cancelar"
+L["Load"] = "Cargar"
+L["Delete"] = "Eliminar"
+L["Select All"] = "Seleccionar Todo"
+L["Click to load"] = "Clic para cargar"
+L["No position presets saved yet."] = "Aún no hay preajustes de posición guardados."
+L["Load position preset '%s'? This will overwrite your current element positions."] = "¿Cargar preajuste '%s'? Se sobrescribirán las posiciones actuales de los elementos."
+L["Delete position preset '%s'? This cannot be undone."] = "¿Eliminar preajuste '%s'? Esta acción no se puede deshacer."
+L["Enter a name for the imported position preset:"] = "Introduce un nombre para el preajuste importado:"
+L["Imported Position Preset"] = "Preajuste Importado"
+L["Position preset saved: "] = "Preajuste de posición guardado: "
+L["Position preset loaded: "] = "Preajuste de posición cargado: "
+L["Position preset deleted: "] = "Preajuste de posición eliminado: "
+L["Position preset imported: "] = "Preajuste de posición importado: "
+L["Export Position Preset"] = "Exportar Preajuste de Posición"
+L["Import Position Preset"] = "Importar Preajuste de Posición"
+L["Invalid position preset string."] = "Cadena de preajuste de posición no válida."
+L["Not a valid DragonUI position preset string."] = "No es una cadena de preajuste de posición DragonUI válida."
+L["Failed to export position preset."] = "No se pudo exportar el preajuste de posición."
+L["Save New Preset"] = "Guardar Nuevo Preajuste"
+L["Load Preset"] = "Cargar Preajuste"
+L["Delete Preset"] = "Eliminar Preajuste"
+L["Export Preset"] = "Exportar Preajuste"
+L["Import Preset"] = "Importar Preajuste"
 
 -- ============================================================================
 -- KEYBINDING MODULE
@@ -155,6 +179,7 @@ L["MicroMenu"] = "Micromenú"
 L["VehicleExitOverlay"] = "Salir Vehículo"
 L["StanceOverlay"] = "Posturas"
 L["petbar"] = "Barra Mascota"
+L["ExtraBar1"] = "Barra Extra"
 L["boss"] = "Marcos de Jefe"
 L["Boss Frames"] = "Marcos de Jefe"
 L["Boss1Frame"] = "Marcos de Jefe"
@@ -164,7 +189,8 @@ L["Boss4Frame"] = "Marcos de Jefe"
 L["TotemBarOverlay"] = "Tótems"
 L["PlayerCastbar"] = "Barra Hechizos"
 L["TooltipWidget"] = "Tooltip"
-L["Auras"] = "Auras"
+L["Buff"] = "Beneficio"
+L["Debuffs"] = "Perjuicio"
 L["WeaponEnchants"] = "Encantamientos"
 L["Loot Roll"] = "Botín"
 L["Quest Tracker"] = "Misiones"
@@ -173,6 +199,7 @@ L["Quest Tracker"] = "Misiones"
 L["Drag to move"] = "Arrastra para mover"
 L["Animated minimap border effects for DragonUI."] = "Efectos animados de borde de minimapa para DragonUI."
 L["Right-click to reset"] = "Clic der. para reiniciar"
+L["Click to reset"] = "Clic para reiniciar"
 L["Status Tooltip:"] = "Tooltip de estado:"
 L["Top"] = "Arriba"
 L["Bottom"] = "Abajo"
@@ -213,15 +240,18 @@ L["Use DragonUI"] = "Usar DragonUI"
 L["Disable Both"] = "Desactivar ambos"
 L["Use DragonUI Unit Frame Layers"] = "Usar Unit Frame Layers de DragonUI"
 L["Disable both Unit Frame Layers"] = "Desactivar ambos Unit Frame Layers"
-L["DragonUI - Party Frame Issue"] = true
-L["You joined a party while in combat. Due to CompactRaidFrame taint issues, party frames may not display correctly."] = true
-L["Reload the UI to fix party frame display?"] = true
 
 -- Conflict reasons
 L["Conflicts with DragonUI's custom unit frame textures and power bar system."] = "Entra en conflicto con las texturas personalizadas de marcos de unidad y el sistema de barra de poder de DragonUI."
-L["Known taint issues when manipulating party frames during combat. DragonUI provides automatic fixes."] = "Problemas conocidos de contaminación al manipular marcos de grupo en combate. DragonUI proporciona correcciones automáticas."
 L["Resets minimap mask and blip textures. DragonUI re-applies its custom textures automatically."] = "Restablece la máscara del minimapa y las texturas de puntos. DragonUI vuelve a aplicar sus texturas personalizadas automáticamente."
 L["SexyMap modifies the minimap borders, shape, and zone text which conflicts with DragonUI's minimap module."] = "SexyMap modifica los bordes del minimapa, la forma y el texto de zona, lo cual entra en conflicto con el módulo de minimapa de DragonUI."
+L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."] = "Usa la transparencia nativa de la placa para identificar la placa del objetivo; entra en conflicto con el comportamiento anti-atenuado por defecto de DragonUI."
+L["Parents its cooldown icons to the native health bar; conflicts with DragonUI's default health-bar hiding."] = "Cuelga sus iconos de cooldown en la barra de vida nativa; entra en conflicto con el ocultado por defecto de esa barra en DragonUI."
+
+-- Nameplate addon compatibility popup
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Addon Compatibility so it works correctly?"] = "Se detectó |cFFFFFF00%s|r. ¿Activar la compatibilidad de addons de placas para que funcione correctamente?"
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Health Bar Compatibility so it works correctly?"] = "Se detectó |cFFFFFF00%s|r. ¿Activar la compatibilidad de barra de vida de placas para que funcione correctamente?"
+L["Enable"] = "Activar"
 
 -- SexyMap compatibility popup
 L["DragonUI - SexyMap Detected"] = "DragonUI - SexyMap Detectado"
@@ -286,6 +316,25 @@ L["Slot unlocked (bag %d, slot %d)."] = "Slot desbloqueado (bolsa %d, slot %d)."
 L["Could not clear locks (config not ready)."] = "No se pudieron limpiar los bloqueos (configuración no lista)."
 L["Cleared all sort-locked slots."] = "Se limpiaron todos los slots bloqueados del ordenado."
 
+-- Sell Scrap
+L["Sell Scrap"] = "Vender Chatarra"
+L["Click to sell all gray (poor) items to vendor."] = "Clic para vender todos los objetos grises (pobres) al vendedor."
+L["A merchant window must be open."] = "Debe estar abierta una ventana de comerciante."
+L["Open a merchant window first to sell scrap items."] = "Abre primero una ventana de comerciante para vender chatarra."
+L["Sold %d scrap item(s) for %s."] = "Vendido(s) %d objeto(s) de chatarra por %s."
+L["No scrap items to sell."] = "No hay objetos de chatarra para vender."
+
+-- Guild Bank Sort
+L["You must be at the guild bank."] = "Debes estar en el banco de hermandad."
+L["Could not determine the current guild bank tab."] = "No se pudo determinar la pestaña actual del banco de hermandad."
+L["You need full deposit and withdraw access to this tab to sort it."] = "Necesitas acceso completo de depósito y retiro en esta pestaña para ordenarla."
+L["This guild bank tab is already sorted!"] = "¡Esta pestaña del banco de hermandad ya está ordenada!"
+L["Sort this guild bank tab? Depending on your server, this may be logged and count against your guild's shared withdrawal allowance, the same as moving items by hand."] = "¿Ordenar esta pestaña del banco de hermandad? Dependiendo de tu servidor, esto puede quedar registrado y contar contra el límite de retiro compartido de tu hermandad, igual que si movieras los objetos a mano."
+L["Sort"] = "Ordenar"
+L["Click to sort items in the currently open guild bank tab."] = "Haz clic para ordenar los objetos de la pestaña del banco de hermandad actualmente abierta."
+L["Never moves items between tabs."] = "Nunca mueve objetos entre pestañas."
+L["Sort Guild Bank Tab"] = "Ordenar pestaña del banco de hermandad"
+
 -- Micromenu Latency
 L["Network"] = "Red"
 L["Latency"] = "Latencia"
@@ -305,7 +354,6 @@ L["disabled"] = true
 L["Enabled"] = "Activado"
 L["Disabled"] = "Desactivado"
 L["Legacy refresh failed for"] = true
-L["RegisterMover: name and parent are required"] = true
 L["Bonus Action Button %d"] = true
 L["Stance Button %d"] = true
 L["Pet Action Button %d"] = true
@@ -387,6 +435,11 @@ L["Dark Mode"] = "Modo Oscuro"
 L["Darken UI borders and chrome"] = "Oscurecer bordes y elementos de la interfaz"
 L["Item Quality"] = "Calidad de Objeto"
 L["Color item borders by quality in bags, character panel, bank, and merchant"] = "Colorear los bordes de objetos por calidad en bolsas, personaje, banco y mercader"
+-- Item Level
+L["Item Level"] = "Nivel de Objeto"
+L["Show item level on gear icons in bags, character panel, bank, and more"] = "Mostrar el nivel de objeto en los iconos del equipo en bolsas, panel de personaje, banco y más"
+L["Item Level: %d"] = "Nivel de objeto: %d"
+
 L["Key Binding"] = "Atajos de Teclado"
 L["LibKeyBound integration for intuitive keybinding"] = "Integración con LibKeyBound para asignación de teclas intuitiva"
 L["Buff Frame"] = "Marco de Beneficios"
@@ -402,12 +455,17 @@ L["Shift"] = "Mayús"
 L["Left Click"] = "Clic izquierdo"
 L["Right Click"] = "Clic derecho"
 L["Middle Click"] = "Clic central"
-L["Combuctor"] = "Combuctor"
+L["Bag Skin"] = "Apariencia de bolsas"
+L["Retail-style skin for Blizzard bag windows"] = "Apariencia estilo Retail para las ventanas de bolsas de Blizzard"
+L["Bagster"] = "Bagster"
 L["All-in-one bag replacement with filtering and search"] = "Reemplazo de bolsas todo en uno con filtros y búsqueda"
 L["Stance Bar"] = "Barra de Posturas"
 L["Vehicle"] = "Vehículo"
 L["Vehicle interface enhancements"] = "Mejoras de la interfaz de vehículo"
 L["Pet Bar"] = "Barra de Mascota"
+L["Extra Bar"] = "Barra Extra"
+L["A standalone action bar, independent of any class bonus bar"] = "Una barra de acción independiente, no ligada a la barra de bonificación de ninguna clase"
+L["Drag a spell, item or macro here."] = "Arrastra un hechizo, objeto o macro aquí."
 L["Micro Menu"] = "Micromenú"
 L["Main Bars"] = "Barras Principales"
 L["Main action bars, status bars, scaling and positioning"] = "Barras de acción principales, barras de estado, escalado y posicionamiento"
@@ -418,17 +476,43 @@ L["Custom minimap styling, positioning, tracking icons and calendar"] = "Estilo,
 L["Quest tracker positioning and styling"] = "Posicionamiento y estilo del rastreador de misiones"
 L["Tooltip"] = "Tooltip"
 L["Enhanced tooltip styling with class colors and health bars"] = "Estilo mejorado del tooltip con colores de clase y barras de salud"
+L["Nameplates"] = "Placas de nombre"
+L["Apply DragonUI nameplate styling."] = "Aplica el estilo DragonUI a las placas de nombre."
 L["Unit Frame Layers"] = "Capas de Marcos de Unidad"
 L["Heal prediction, absorb shields, and animated health loss on unit frames"] = "Predicción de sanación, escudos de absorción y pérdida de salud animada en marcos de unidad"
 L["Stance/shapeshift bar positioning and styling"] = "Posicionamiento y estilo de la barra de posturas/cambiaformas"
 L["Pet action bar positioning and styling"] = "Posicionamiento y estilo de la barra de acción de mascota"
 L["Micro menu and bags system styling and positioning"] = "Estilo y posicionamiento del micromenú y sistema de bolsas"
+L["|cff00ff00Left-Click|r to show this bag's items"] = "|cff00ff00Clic izquierdo|r para mostrar los objetos de esta bolsa"
+L["|cff00ff00Left-Click|r to hide this bag's items"] = "|cff00ff00Clic izquierdo|r para ocultar los objetos de esta bolsa"
+L["|cff00ff00Drag|r to move this bag"] = "|cff00ff00Arrastra|r para mover esta bolsa"
 L["Sort complete."] = "Ordenación completada."
 L["Sort already in progress."] = "La ordenación ya está en progreso."
 L["Bags already sorted!"] = "¡Las bolsas ya están ordenadas!"
 L["You must be at the bank."] = "Debes estar en el banco."
 L["Bank already sorted!"] = "¡El banco ya está ordenado!"
 L["Reputation: "] = "Reputación: "
-L["Error in SafeCall:"] = "Error en SafeCall:"
 
 L["Copy Text"] = "Copiar texto"
+
+-- Version Check Module
+L["Version Check"] = "Control de Versión"
+L["Broadcast and detect addon version updates across group members"] = "Detecta actualizaciones del addon entre miembros del grupo enviando y recibiendo la versión"
+
+-- Quest nameplate icons wizard (Questie coexistence)
+L["Quest Icons on Nameplates"] = "Iconos de misión en las placas"
+L["Which quest icons do you want on your nameplates?"] = "¿Qué iconos de misión quieres en tus placas?"
+L["Kill"] = "Matar"
+L["Loot"] = "Botín"
+L['Pointer mode (just "!")'] = 'Modo puntero (solo "!")'
+L["Use Questie"] = "Usar Questie"
+L["Applying quest icon settings needs a UI reload."] = "Aplicar los ajustes de iconos de misión requiere recargar la interfaz."
+L["Reload"] = "Recargar"
+
+-- Alt Gold
+L["Alt Gold"] = "Oro de otros personajes"
+L["Show the gold of your other characters when hovering the money in your bags"] = "Muestra el oro de tus otros personajes al pasar el mouse sobre el dinero de las bolsas"
+L["Character Gold"] = "Oro de personajes"
+L["No other characters recorded yet"] = "Aún no hay otros personajes registrados"
+L["(current)"] = "(actual)"
+L["Total"] = "Total"

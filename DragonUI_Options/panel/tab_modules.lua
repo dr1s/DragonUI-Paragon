@@ -107,7 +107,7 @@ local function BuildModulesTab(scroll)
     ModuleToggle(abSection, {
         label = LO["Enable All Action Bar Modules"],
         desc = LO["Master toggle for the complete action bars system."],
-        moduleNames = { "mainbars", "vehicle", "stance", "petbar", "multicast", "buttons", "noop" },
+        moduleNames = { "mainbars", "vehicle", "stance", "petbar", "multicast", "buttons", "noop", "micromenu" },
     })
 
     -- ====================================================================
@@ -182,6 +182,12 @@ local function BuildModulesTab(scroll)
         moduleName = "keybinding",
     })
 
+    ModuleToggle(uiSection, {
+        label = LO["Version Check"],
+        desc = LO["Broadcast and detect addon version updates across group members."],
+        moduleName = "versioncheck",
+    })
+
     -- ====================================================================
     -- UNIT FRAME LAYERS
     -- ====================================================================
@@ -248,6 +254,7 @@ local function BuildModulesTab(scroll)
             { key = "cooldowns",   name = LO["Cooldowns"] },
             { key = "auracooldowns", name = LO["Target & Focus Aura Customization"] },
             { key = "minimap",     name = LO["Minimap"] },
+            { key = "nameplates",  name = LO["Nameplates"] },
             { key = "keybinding",  name = LO["KeyBinding"] },
             { key = "questtracker", name = LO["Quest Tracker"] },
         }

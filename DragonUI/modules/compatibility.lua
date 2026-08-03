@@ -51,28 +51,11 @@ local function ResolveRegistryKey(addonName)
         return lowered
     end
 
-    -- Compact raid frame addon can appear with different names/casing.
-    if lowered == "compactraidframes" or lowered == "blizzard_compactraidframes" then
-        return "compactraidframe"
-    end
-
     return nil
 end
 
 local function IsRegistryAddonLoaded(addonName)
-    if IsAddonLoadedCached(addonName) then
-        return true
-    end
-
-    if addonName == "compactraidframe" then
-        return IsAddonLoadedCached("compactraidframes")
-            or IsAddonLoadedCached("CompactRaidFrame")
-            or IsAddonLoadedCached("CompactRaidFrames")
-            or IsAddonLoadedCached("Blizzard_CompactRaidFrames")
-            or _G.CompactRaidFrameManager ~= nil
-    end
-
-    return false
+    return IsAddonLoadedCached(addonName)
 end
 
 -- ============================================================================
@@ -397,123 +380,77 @@ behaviors.UnitFrameLayersCompatibility = function(addonName, addonInfo)
     StaticPopup_Show(popupName)
 end
 
--- Behavior: CompactRaidFrame taint mitigation
-behaviors.CompactRaidFrameFix = function(addonName, addonInfo)
-    
-    -- Simple state tracking
-    local inCombat = false
-    local needsRefresh = false
-    local lastPartySize = GetNumPartyMembers()
-    local partySizeWhenCombatStarted = 0
-    
-    -- Simple cleanup system for party frames
-    local function CleanPartyFrames()
-        -- Non-destructive cleanup: only reconcile visibility and request refresh.
-        for i = 1, 4 do
-            local frameName = 'PartyMemberFrame' .. i
-            local frame = _G[frameName]
-            
-            if frame then
-                local unit = "party" .. i
-                if UnitExists(unit) then
-                    frame:Show()
-                else
-                    frame:Hide()
-                end
-            end
-        end
-        
-        -- Simple refresh of party system
-        DelayedCall(function()
-            if _G.PartyMemberFrame_UpdateParty then
-                _G.PartyMemberFrame_UpdateParty()
-            end
-            
-            -- Apply DragonUI refresh if available
-            if addon and addon.RefreshPartyFrames then
-                addon.RefreshPartyFrames()
-            end
-        end, 0.2)
+-- Behavior: prompt to enable nameplateAlphaCompat when a plate-buff/cooldown addon is
+-- detected. Those addons read the nameplate's native alpha/IsShown as their identity
+-- signal; DragonUI overrides native alpha by default, which breaks their plate matching.
+local nameplateAlphaCompatPrompted = false
+behaviors.NameplateAddonAlphaCompat = function(addonName, addonInfo)
+    if nameplateAlphaCompatPrompted then
+        return
     end
-    
-    -- Show reload dialog for party frame creation issues
-    local function ShowPartyReloadDialog()
-        StaticPopupDialogs["DRAGONUI_PARTY_RELOAD"] = {
-            text = "|cFFFFFF00" .. L["DragonUI - Party Frame Issue"] .. "|r\n\n" ..
-                   L["You joined a party while in combat. Due to CompactRaidFrame taint issues, party frames may not display correctly."] ..
-                   "\n\n|cFFFF9999" .. L["Reload the UI to fix party frame display?"] .. "|r",
-            button1 = L["Reload UI"],
-            button2 = L["Skip"],
-            OnAccept = function()
-                ReloadUI()
-            end,
-            OnCancel = function() end,
-            timeout = 15, -- Auto-dismiss after 15 seconds
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3
-        }
-        
-        StaticPopup_Show("DRAGONUI_PARTY_RELOAD")
-    end
-    
 
-    
-    -- Polling frame that ONLY runs while in combat (auto-disables otherwise)
-    local pollingFrame = CreateFrame("Frame")
-    local checkInterval = 0
-    
-    local function StartPolling()
-        checkInterval = 0
-        pollingFrame:SetScript("OnUpdate", function(self, elapsed)
-            checkInterval = checkInterval + elapsed
-            if checkInterval < 0.5 then return end
-            checkInterval = 0
-            
-            local currentPartySize = GetNumPartyMembers()
-            if currentPartySize ~= lastPartySize then
-                needsRefresh = true
-            end
-        end)
+    local npCfg = addon.db and addon.db.profile and addon.db.profile.modules
+        and addon.db.profile.modules.nameplates
+    if not npCfg or npCfg.nameplateAlphaCompat == true then
+        return
     end
-    
-    local function StopPolling()
-        pollingFrame:SetScript("OnUpdate", nil)
-        
-        if needsRefresh then
-            local currentPartySize = GetNumPartyMembers()
-            if currentPartySize == 0 and partySizeWhenCombatStarted > 0 then
-                CleanPartyFrames()
-            elseif currentPartySize > 0 and partySizeWhenCombatStarted > 0 then
-                CleanPartyFrames()
-            elseif currentPartySize > 0 and partySizeWhenCombatStarted == 0 then
-                ShowPartyReloadDialog()
-            end
-            needsRefresh = false
-        end
-        
-        lastPartySize = GetNumPartyMembers()
-        partySizeWhenCombatStarted = 0
-        inCombat = false
-    end
-    
-    -- Use events to toggle polling on/off (much cheaper than always polling)
-    pollingFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-    pollingFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-    pollingFrame:SetScript("OnEvent", function(self, event)
-        if event == "PLAYER_REGEN_DISABLED" then
-            inCombat = true
-            partySizeWhenCombatStarted = GetNumPartyMembers()
-            lastPartySize = partySizeWhenCombatStarted
-            StartPolling()
-        elseif event == "PLAYER_REGEN_ENABLED" then
-            StopPolling()
-        end
-    end)
-    
 
+    nameplateAlphaCompatPrompted = true
+
+    local popupName = "DRAGONUI_NAMEPLATE_ALPHA_COMPAT"
+    StaticPopupDialogs[popupName] = {
+        text = "|cFF00CCFFDragonUI|r\n\n" ..
+            string.format(L["Detected |cFFFFFF00%s|r. Enable Nameplate Addon Compatibility so it works correctly?"], addonInfo.name),
+        button1 = L["Enable"],
+        button2 = L["Not Now"],
+        OnAccept = function()
+            npCfg.nameplateAlphaCompat = true
+            ReloadUI()
+        end,
+        OnCancel = function() end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3
+    }
+
+    StaticPopup_Show(popupName)
 end
 
+-- Distinct from NameplateAddonAlphaCompat above: this skips the health-bar SetAlpha(0), not plate-root alpha.
+local nameplateBarAlphaCompatPrompted = false
+behaviors.NameplateBarAlphaCompat = function(addonName, addonInfo)
+    if nameplateBarAlphaCompatPrompted then
+        return
+    end
+
+    local npCfg = addon.db and addon.db.profile and addon.db.profile.modules
+        and addon.db.profile.modules.nameplates
+    if not npCfg or npCfg.nameplateBarAlphaCompat == true then
+        return
+    end
+
+    nameplateBarAlphaCompatPrompted = true
+
+    local popupName = "DRAGONUI_NAMEPLATE_BAR_ALPHA_COMPAT"
+    StaticPopupDialogs[popupName] = {
+        text = "|cFF00CCFFDragonUI|r\n\n" ..
+            string.format(L["Detected |cFFFFFF00%s|r. Enable Nameplate Health Bar Compatibility so it works correctly?"], addonInfo.name),
+        button1 = L["Enable"],
+        button2 = L["Not Now"],
+        OnAccept = function()
+            npCfg.nameplateBarAlphaCompat = true
+            ReloadUI()
+        end,
+        OnCancel = function() end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3
+    }
+
+    StaticPopup_Show(popupName)
+end
 
 -- ============================================================================
 -- ADDON REGISTRY
@@ -984,12 +921,35 @@ ADDON_REGISTRY = {
         behavior = behaviors.UnitFrameLayersCompatibility,
         checkOnce = true
     },
-    ["compactraidframe"] = {
-        name = "CompactRaidFrame",
-        reason = L["Known taint issues when manipulating party frames during combat. DragonUI provides automatic fixes."],
-        behavior = behaviors.CompactRaidFrameFix,
-        checkOnce = true,
-        listenToRaidEvents = true -- Enable raid event monitoring
+    ["platebuffs"] = {
+        name = "PlateBuffs",
+        reason = L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."],
+        behavior = behaviors.NameplateAddonAlphaCompat,
+        checkOnce = true
+    },
+    ["crosshairs"] = {
+        name = "Crosshairs",
+        reason = L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."],
+        behavior = behaviors.NameplateAddonAlphaCompat,
+        checkOnce = true
+    },
+    ["icicle"] = {
+        name = "Icicle",
+        reason = L["Parents its cooldown icons to the native health bar; conflicts with DragonUI's default health-bar hiding."],
+        behavior = behaviors.NameplateBarAlphaCompat,
+        checkOnce = true
+    },
+    ["nameplatesct"] = {
+        name = "NameplateSCT",
+        reason = L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."],
+        behavior = behaviors.NameplateAddonAlphaCompat,
+        checkOnce = true
+    },
+    ["classicnumbers"] = {
+        name = "ClassicNumbers",
+        reason = L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."],
+        behavior = behaviors.NameplateAddonAlphaCompat,
+        checkOnce = true
     },
     ["carbonite"] = {
         name = "Carbonite",
@@ -1192,13 +1152,8 @@ local function RegisterEventsForAddon(addonName, addonInfo)
     
     local eventFrame = CreateFrame("Frame", "DragonUI_Events_" .. addonName)
     eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
-    eventFrame:RegisterEvent("PARTY_CONVERTED_TO_RAID")
     eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
-    eventFrame:RegisterEvent("PARTY_LEADER_CHANGED")
-    eventFrame:RegisterEvent("GROUP_FORMED")
-    eventFrame:RegisterEvent("GROUP_JOINED")
-    eventFrame:RegisterEvent("GROUP_LEFT")
-    
+
     eventFrame:SetScript("OnEvent", function(self, event)
         if compatibility.raidUpdateHandlers and compatibility.raidUpdateHandlers[addonName] then
             compatibility.raidUpdateHandlers[addonName]()
@@ -1424,17 +1379,6 @@ function compatibility:GetActiveAddons()
 end
 
 -- ============================================================================
--- CLEANUP FUNCTIONS
--- ============================================================================
-
-local function Cleanup()
-    for addonName, _ in pairs(activeEventFrames) do
-        UnregisterEventsForAddon(addonName)
-    end
-    activeEventFrames = {}
-end
-
--- ============================================================================
 -- INITIALIZATION
 -- ============================================================================
 
@@ -1465,51 +1409,6 @@ local sexyMapInstalled = IsSexyMapInstalled()
 addon._sexyMapInstalled = sexyMapInstalled
 
 if sexyMapInstalled then
-    local sexyMapOptions = {
-        name = L["SexyMap Compatibility"],
-        type = "group",
-        order = 11, -- right after minimap
-        args = {
-            description = {
-                type = 'description',
-                name = L["Choose how DragonUI and SexyMap share the minimap."],
-                order = 1
-            },
-            sexymap_mode = {
-                type = 'select',
-                name = L["Minimap Mode"],
-                desc = L["Requires UI reload to apply."],
-                values = {
-                    ["sexymap"]  = L["SexyMap"],
-                    ["dragonui"] = L["DragonUI"],
-                    ["hybrid"]   = L["Hybrid"],
-                },
-                get = function()
-                    local cfg = addon.db and addon.db.profile and addon.db.profile.modules
-                        and addon.db.profile.modules.minimap
-                    return cfg and cfg.sexymap_mode or "dragonui"
-                end,
-                set = function(_, val)
-                    if addon.db and addon.db.profile and addon.db.profile.modules
-                        and addon.db.profile.modules.minimap then
-                        addon.db.profile.modules.minimap.sexymap_mode = val
-                    end
-                    StaticPopup_Show("DRAGONUI_SEXYMAP_MODE_RELOAD")
-                end,
-                order = 2,
-            },
-            mode_desc = {
-                type = 'description',
-                name = function()
-                    return "\n|cFF888888" .. L["SexyMap"] .. ":|r " .. L["Uses SexyMap for the minimap."] .. "\n" ..
-                           "|cFF888888" .. L["DragonUI"] .. ":|r " .. L["Uses DragonUI for the minimap."] .. "\n" ..
-                              "|cFF888888" .. L["Hybrid"] .. ":|r " .. L["SexyMap visuals with DragonUI editor and positioning."]
-                end,
-                order = 3
-            }
-        }
-    }
-
     StaticPopupDialogs["DRAGONUI_SEXYMAP_MODE_RELOAD"] = {
         text = "|cFF00CCFFDragonUI|r\n\n" .. L["Minimap mode changed. Reload UI to apply?"],
         button1 = ACCEPT or "Accept",
@@ -1520,13 +1419,4 @@ if sexyMapInstalled then
         hideOnEscape = true,
         preferredIndex = 3
     }
-
-    -- DragonUI_Options is LoadOnDemand — RegisterOptionsGroup may not exist yet.
-    -- Queue the table; it gets picked up when the first RegisterOptionsGroup call runs.
-    if addon.RegisterOptionsGroup then
-        addon:RegisterOptionsGroup("sexymap", sexyMapOptions)
-    else
-        addon._pendingOptionsGroups = addon._pendingOptionsGroups or {}
-        table.insert(addon._pendingOptionsGroups, { name = "sexymap", table = sexyMapOptions })
-    end
 end

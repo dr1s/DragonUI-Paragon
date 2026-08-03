@@ -26,6 +26,55 @@
         frames = {}
     }
 
+    -- Saves the Blizzard-default editbox border textures before we clear them,
+    -- so we can restore them when vanillaEditbox is toggled on at runtime.
+    local function SaveEditboxTextures()
+        if ChatModsModule.originalStates.editboxTextures then return end
+        local saved = {}
+        for i = 1, CHAT_FRAME_LIMIT do
+            saved[i] = {}
+            for _, part in ipairs(CHAT_EDITBOX_PARTS) do
+                local tex = _G["ChatFrame" .. i .. "EditBox" .. part]
+                if tex then
+                    saved[i][part] = tex:GetTexture()
+                end
+                local focus = _G["ChatFrame" .. i .. "EditBoxFocus" .. part]
+                if focus then
+                    saved[i]["Focus" .. part] = {focus:GetTexture(), focus:GetHeight()}
+                end
+            end
+        end
+        ChatModsModule.originalStates.editboxTextures = saved
+    end
+
+    -- Applies or removes the DragonUI transparent editbox border textures.
+    -- vanillaMode=true → restore saved Blizzard originals; false → apply transparent style.
+    local function ApplyEditboxBorderTextures(vanillaMode)
+        local saved = ChatModsModule.originalStates.editboxTextures
+        for i = 1, CHAT_FRAME_LIMIT do
+            for _, part in ipairs(CHAT_EDITBOX_PARTS) do
+                local tex = _G["ChatFrame" .. i .. "EditBox" .. part]
+                local focus = _G["ChatFrame" .. i .. "EditBoxFocus" .. part]
+                if vanillaMode then
+                    local s = saved and saved[i]
+                    if tex and s and s[part] then
+                        tex:SetTexture(s[part])
+                    end
+                    if focus and s and s["Focus" .. part] then
+                        focus:SetTexture(s["Focus" .. part][1])
+                        focus:SetHeight(s["Focus" .. part][2])
+                    end
+                else
+                    if tex then tex:SetTexture(0, 0, 0, 0) end
+                    if focus then
+                        focus:SetTexture(0, 0, 0, 0.8)
+                        focus:SetHeight(18)
+                    end
+                end
+            end
+        end
+    end
+
     -- Register with ModuleRegistry
     if addon.RegisterModule then
         addon:RegisterModule("chatmods", ChatModsModule,
@@ -91,9 +140,57 @@
         SetMouseIfChanged(button, alpha >= 0.95)
     end
 
+local function GetOverflowButton()
+    return ChatModsModule.frames.overflowButton
+        or (_G.GENERAL_CHAT_DOCK and _G.GENERAL_CHAT_DOCK.overflowButton)
+        or _G.GeneralDockManagerOverflowButton
+end
+
+local function CacheOverflowButton()
+    local overflow = (_G.GENERAL_CHAT_DOCK and _G.GENERAL_CHAT_DOCK.overflowButton)
+        or _G.GeneralDockManagerOverflowButton
+    ChatModsModule.frames.overflowButton = overflow
+    return overflow
+end
+
+-- One check per tick for dock chrome (overflow/menu/friends), not per chat frame.
+local function IsDockChromeHovered()
+    local overflow = GetOverflowButton()
+    if overflow and overflow:IsShown() then
+        if overflow.list and overflow.list:IsShown() then
+            return true
+        end
+        if overflow:IsMouseOver() then
+            return true
+        end
+    end
+    if _G.ChatFrameMenuButton and _G.ChatFrameMenuButton:IsMouseOver() then
+        return true
+    end
+    if _G.FriendsMicroButton and _G.FriendsMicroButton:IsMouseOver() then
+        return true
+    end
+    return false
+end
+
+-- Do not Show(): Blizzard hides this when tabs fit; only sync alpha/mouse.
+-- Cancel Blizzard UIFrameFade (FadeIn/Out targets ~0.4/1); we mirror tabIdleAlpha like menu/friends.
+local function SetOverflowButtonAlpha(alpha)
+    local overflow = GetOverflowButton()
+    if not overflow or not overflow:IsShown() then return end
+    if UIFrameFadeRemoveFrame then
+        UIFrameFadeRemoveFrame(overflow)
+    end
+    if IsAlphaChanged(overflow:GetAlpha(), alpha) then
+        overflow:SetAlpha(alpha)
+    end
+    SetMouseIfChanged(overflow, alpha >= 0.95)
+end
+
 local function SetPrimaryChatButtonsAlpha(alpha)
     SetButtonAlpha(_G.ChatFrameMenuButton, alpha)
     SetButtonAlpha(_G.FriendsMicroButton, alpha)
+    SetOverflowButtonAlpha(alpha)
 end
 
     local function SetChatHoverButtonsVisible(i, visible, entry)
@@ -179,6 +276,37 @@ end
         return (config and config.editboxIdleAlpha ~= nil) and config.editboxIdleAlpha or 0
     end
 
+    -- Prefer SELECTED_CHAT_FRAME; overflow can leave it stale vs dock.selected.
+    local function GetSelectedChatFrameIndex()
+        local selectedChat = _G.SELECTED_CHAT_FRAME
+        local dockSelected = (_G.FCFDock_GetSelectedWindow and _G.GENERAL_CHAT_DOCK)
+            and _G.FCFDock_GetSelectedWindow(_G.GENERAL_CHAT_DOCK)
+        local selected = selectedChat
+        if dockSelected and selectedChat and selectedChat.isDocked and selectedChat ~= dockSelected then
+            selected = dockSelected
+        elseif not selected then
+            selected = dockSelected or _G.SELECTED_DOCK_FRAME
+        end
+        local index = (selected and selected.GetID and selected:GetID())
+            or ChatModsModule.frames.lastSelectedChatIndex
+            or 1
+        if index < 1 or index > CHAT_FRAME_LIMIT then
+            index = 1
+        end
+        return index
+    end
+
+    local function IsChatFrameHovered(cf, tab, bf, eb, dockChromeHovered)
+        if (tab and tab:IsMouseOver())
+            or (cf and cf:IsMouseOver())
+            or (bf and bf:IsMouseOver())
+            or (eb and (eb:IsMouseOver() or eb:HasFocus())) then
+            return true
+        end
+        -- Menu/friends/overflow sit on the dock column (same as Blizzard FCF_OnUpdate).
+        return (dockChromeHovered and cf and cf.isDocked) and true or false
+    end
+
     local StartChatButtonsHoverUpdater
     local StopChatButtonsHoverUpdater
 
@@ -191,14 +319,9 @@ end
         local styleIdleAlpha = GetStyleIdleAlpha(cfg)
         local ebIdleAlpha = GetEditboxIdleAlpha(cfg)
         local fadeBackgroundWithButtons = tabIdleAlpha <= ALPHA_EPSILON
-        local selectedIndex = (_G.SELECTED_CHAT_FRAME and _G.SELECTED_CHAT_FRAME.GetID and _G.SELECTED_CHAT_FRAME:GetID())
-            or ChatModsModule.frames.lastSelectedChatIndex
-            or 1
+        local selectedIndex = GetSelectedChatFrameIndex()
         local selectedAlpha = ChatModsModule.frames.lastSelectedButtonAlpha or tabIdleAlpha
-
-        if selectedIndex < 1 or selectedIndex > CHAT_FRAME_LIMIT then
-            selectedIndex = 1
-        end
+        local dockChromeHovered = IsDockChromeHovered()
 
         for i = 1, CHAT_FRAME_LIMIT do
             local cf = _G["ChatFrame" .. i]
@@ -209,10 +332,7 @@ end
             local tabAlpha = tabIdleAlpha
             if tab then
                 tab.noMouseAlpha = tabIdleAlpha
-                local hovered = (tab and tab:IsMouseOver())
-                    or (cf and cf:IsMouseOver())
-                    or (bf and bf:IsMouseOver())
-                    or (eb and (eb:IsMouseOver() or eb:HasFocus()))
+                local hovered = IsChatFrameHovered(cf, tab, bf, eb, dockChromeHovered)
                 local targetTabAlpha = hovered and 1 or tabIdleAlpha
                 if IsAlphaChanged(tab:GetAlpha(), targetTabAlpha) then
                     tab:SetAlpha(targetTabAlpha)
@@ -232,15 +352,10 @@ end
             end
 
             if eb then
-                if eb:GetBackdrop() then
-                    local ebAlpha = eb:HasFocus() and 1 or ebIdleAlpha
-                    if IsAlphaChanged(eb:GetAlpha(), ebAlpha) then
-                        eb:SetAlpha(ebAlpha)
-                    end
-                else
-                    if IsAlphaChanged(eb:GetAlpha(), 1) then
-                        eb:SetAlpha(1)
-                    end
+                -- Fade applies the same whether or not a custom backdrop (vanilla editbox included).
+                local ebAlpha = eb:HasFocus() and 1 or ebIdleAlpha
+                if IsAlphaChanged(eb:GetAlpha(), ebAlpha) then
+                    eb:SetAlpha(ebAlpha)
                 end
             end
         end
@@ -259,6 +374,11 @@ end
 
 local function OnChatHoverInteraction()
     if not ChatModsModule.applied then return end
+    -- hooksecurefunc runs after FCF_FadeIn/Out already queued UIFrameFade on overflow.
+    local overflow = GetOverflowButton()
+    if overflow and overflow:IsShown() and UIFrameFadeRemoveFrame then
+        UIFrameFadeRemoveFrame(overflow)
+    end
     StartChatButtonsHoverUpdater(true)
 end
 
@@ -326,14 +446,9 @@ local function EnsureChatButtonsHoverUpdater()
         ChatModsModule.frames.chatHoverForceUpdate = nil
         local tabIdleAlpha = GetTabIdleAlpha(cfg)
         local fadeBackgroundWithButtons = tabIdleAlpha <= ALPHA_EPSILON
-        local selectedIndex = (_G.SELECTED_CHAT_FRAME and _G.SELECTED_CHAT_FRAME.GetID and _G.SELECTED_CHAT_FRAME:GetID())
-            or ChatModsModule.frames.lastSelectedChatIndex
-            or 1
+        local selectedIndex = GetSelectedChatFrameIndex()
         local selectedAlpha = ChatModsModule.frames.lastSelectedButtonAlpha or tabIdleAlpha
-
-        if selectedIndex < 1 or selectedIndex > CHAT_FRAME_LIMIT then
-            selectedIndex = 1
-        end
+        local dockChromeHovered = IsDockChromeHovered()
 
         local hasActiveTransition = false
         local wroteVisualState = false
@@ -363,9 +478,9 @@ local function EnsureChatButtonsHoverUpdater()
                 entry.lastBgAlpha = nil
             end
 
-            -- Sync editbox style backdrop: independent from hover.
+            -- Sync editbox alpha: same fade whether or not a custom backdrop (vanilla editbox included).
             local eb = entry.eb
-            if eb and eb:GetBackdrop() then
+            if eb then
                 local ebAlpha = eb:HasFocus() and 1 or ebIdleAlpha
                 if forceUpdate or entry.lastEditboxAlpha == nil or IsAlphaChanged(entry.lastEditboxAlpha, ebAlpha) then
                     eb:SetAlpha(ebAlpha)
@@ -376,10 +491,7 @@ local function EnsureChatButtonsHoverUpdater()
                 entry.lastEditboxAlpha = nil
             end
 
-            local hovered = (entry.tab and entry.tab:IsMouseOver())
-                or (entry.cf and entry.cf:IsMouseOver())
-                or (entry.bf and entry.bf:IsMouseOver())
-                or (entry.eb and (entry.eb:IsMouseOver() or entry.eb:HasFocus()))
+            local hovered = IsChatFrameHovered(entry.cf, entry.tab, entry.bf, entry.eb, dockChromeHovered)
 
             local targetTabAlpha = hovered and 1 or ((entry.tab and entry.tab.noMouseAlpha) or 0)
             if hovered or IsAlphaChanged(tabAlpha, targetTabAlpha) then
@@ -419,7 +531,12 @@ local function ApplyChatFrameTweaks()
 
     ChatModsModule.frames.chatHoverEntries = ChatModsModule.frames.chatHoverEntries or {}
     wipe(ChatModsModule.frames.chatHoverEntries)
-    local tabIdleAlpha = GetTabIdleAlpha(GetModuleConfig())
+    local cfg = GetModuleConfig()
+    local tabIdleAlpha = GetTabIdleAlpha(cfg)
+    local vanillaEditbox = cfg and cfg.vanillaEditbox
+
+    -- Save original editbox border textures before any style changes.
+    SaveEditboxTextures()
 
     for i = 1, CHAT_FRAME_LIMIT do
         local cf = _G[format("ChatFrame%d", i)]
@@ -441,14 +558,15 @@ local function ApplyChatFrameTweaks()
             cf:SetClampedToScreen(true)
             cf:SetClampRectInsets(0, 0, 0, 0)
 
-            -- Transparent editbox
-            for _, part in ipairs(CHAT_EDITBOX_PARTS) do
-                local tex = _G["ChatFrame" .. i .. "EditBox" .. part]
-                if tex then tex:SetTexture(0, 0, 0, 0) end
-                local focus = _G["ChatFrame" .. i .. "EditBoxFocus" .. part]
-                if focus then
-                    focus:SetTexture(0, 0, 0, 0.8)
-                    focus:SetHeight(18)
+            if not vanillaEditbox then
+                for _, part in ipairs(CHAT_EDITBOX_PARTS) do
+                    local tex = _G["ChatFrame" .. i .. "EditBox" .. part]
+                    if tex then tex:SetTexture(0, 0, 0, 0) end
+                    local focus = _G["ChatFrame" .. i .. "EditBoxFocus" .. part]
+                    if focus then
+                        focus:SetTexture(0, 0, 0, 0.8)
+                        focus:SetHeight(18)
+                    end
                 end
             end
 
@@ -491,6 +609,16 @@ local function ApplyChatFrameTweaks()
             end
         end
     end
+
+    local overflow = CacheOverflowButton()
+    if overflow then
+        AttachChatHoverRefreshHooks(overflow)
+        if overflow.list then
+            AttachChatHoverRefreshHooks(overflow.list)
+        end
+    end
+    AttachChatHoverRefreshHooks(_G.ChatFrameMenuButton)
+    AttachChatHoverRefreshHooks(_G.FriendsMicroButton)
 
     EnsureChatButtonsHoverUpdater()
     if ChatModsModule.applied then
@@ -596,25 +724,40 @@ local BD_EDITBOX = {
 
 local function ApplyEditboxStyle()
     local config = GetModuleConfig()
+    local vanillaEditbox = config and config.vanillaEditbox
+
+    if vanillaEditbox then
+        -- Restore Blizzard's default editbox textures; opacity still follows editboxIdleAlpha, applied below.
+        ApplyEditboxBorderTextures(true)
+        for i = 1, CHAT_FRAME_LIMIT do
+            local eb = _G["ChatFrame" .. i .. "EditBox"]
+            if eb then
+                eb:SetBackdrop(nil)
+            end
+        end
+        RefreshChatFadeState()
+        return
+    end
+
     local style = (config and config.editboxStyle) or "none"
     local def = CHAT_STYLES[style]
     local ebIdleAlpha = GetEditboxIdleAlpha(config)
 
+    -- Re-apply transparent border textures in case vanilla mode was previously active.
+    ApplyEditboxBorderTextures(false)
+
     for i = 1, CHAT_FRAME_LIMIT do
         local eb = _G["ChatFrame" .. i .. "EditBox"]
         if eb then
-            -- Focus textures (Left/Mid/Right) render a solid black input indicator.
-            -- When our custom style is active they overlap it, so we hide them;
-            -- when no custom style is set we keep them hidden to avoid a stale dark line.
-            local focusAlpha = 0
+            -- Focus textures render a solid black input indicator; hide them so
+            -- they don't overlap our custom style (or leave a stale dark line).
             for _, part in ipairs(CHAT_EDITBOX_PARTS) do
                 local focus = _G["ChatFrame" .. i .. "EditBoxFocus" .. part]
-                if focus then focus:SetTexture(0, 0, 0, focusAlpha) end
+                if focus then focus:SetTexture(0, 0, 0, 0) end
             end
 
             if not def then
                 eb:SetBackdrop(nil)
-                eb:SetAlpha(1)
             else
                 eb:SetBackdrop(BD_EDITBOX)
                 local r, g, b, a = unpack(def.bg)
@@ -944,27 +1087,76 @@ local function CreateCopyFrame()
     tinsert(UISpecialFrames, "DragonUI_ChatCopyFrame")
 end
 
-local function ChatCopyFunc(frame)
-    local cf = _G[format("ChatFrame%d", frame:GetID())]
-    if not cf then return end
-    local _, size = cf:GetFont()
-    FCF_SetChatWindowFontSize(cf, cf, 0.01)
+-- When CleanerChat / Glass UI is active, the Blizzard ChatFrame is hidden
+-- (alpha=0, disabled mouse) and messages live in Glass's SlidingMessageFrame
+-- as MessageLine frames with their own FontStrings. Returns the joined text,
+-- or nil if Glass isn't active/usable for this tab.
+-- Wrapped in pcall by the caller: Glass's internal state shape isn't part of
+-- its public API and could change, and we want to fall back to reading the
+-- Blizzard ChatFrame instead of erroring out when that happens.
+local function ReadGlassChatText(id)
+    local Glass = _G.LibStub and _G.LibStub("AceAddon-3.0", true)
+    if not Glass then return nil end
+    Glass = Glass:GetAddon("Glass", true)
+    if not Glass then return nil end
+
+    local uiManager = Glass:GetModule("UIManager")
+    if not (uiManager and uiManager.state and uiManager.state.frames[id]) then return nil end
+
+    local smf = uiManager.state.frames[id]
+    -- Combat Log (ChatFrame2) renders natively — skip Glass path
+    if smf.state.isCombatLog then return nil end
 
     local lines = {}
-    local ct = 1
-    local regionCount = select("#", cf:GetRegions())
-    for i = regionCount, 1, -1 do
-        local region = select(i, cf:GetRegions())
-        if region:GetObjectType() == "FontString" then
-            lines[ct] = tostring(region:GetText())
-            ct = ct + 1
+    for _, message in ipairs(smf.state.messages or {}) do
+        if message.text and message.text.GetText then
+            local line = message.text:GetText()
+            if line and line ~= "" then
+                lines[#lines + 1] = tostring(line)
+            end
         end
     end
+    if #lines == 0 then return nil end
+    return table_concat(lines, "\n", 1, #lines)
+end
 
-    local text = table_concat(lines, "\n", 1, ct - 1)
-    FCF_SetChatWindowFontSize(cf, cf, size)
+local function ChatCopyFunc(frame)
+    local id = frame:GetID()
+    local cf = _G[format("ChatFrame%d", id)]
+    if not cf then return end
+
+    local ok, glassText = pcall(ReadGlassChatText, id)
+    if not ok then
+        -- Surface the error (visible with Lua errors on / BugSack) instead of
+        -- failing silently, while still falling back to the Blizzard reader below.
+        geterrorhandler()(glassText)
+    end
+    local text = ok and glassText or nil
+
+    -- Fallback: read from the Blizzard ChatFrame (original behavior).
+    -- This handles: Glass not installed, combat log, error reading Glass's
+    -- state, or any other case.
+    if not text then
+        local _, size = cf:GetFont()
+        FCF_SetChatWindowFontSize(cf, cf, 0.01)
+
+        local lines = {}
+        local ct = 1
+        local regionCount = select("#", cf:GetRegions())
+        for i = regionCount, 1, -1 do
+            local region = select(i, cf:GetRegions())
+            if region:GetObjectType() == "FontString" then
+                lines[ct] = tostring(region:GetText())
+                ct = ct + 1
+            end
+        end
+
+        text = table_concat(lines, "\n", 1, ct - 1)
+        FCF_SetChatWindowFontSize(cf, cf, size)
+    end
+
     DragonUI_ChatCopyFrame:Show()
-    DragonUI_ChatCopyBox:SetText(text)
+    DragonUI_ChatCopyBox:SetText(text or "")
     DragonUI_ChatCopyBox:HighlightText(0)
 end
 
@@ -1130,6 +1322,24 @@ local function ApplyChatModsSystem()
         ChatModsModule.hooks.chatDockSwitchRefresh = true
     end
 
+    -- Overflow list skips SELECTED_CHAT_FRAME + FCF_FadeInChatFrame (tab click does both).
+    if _G.FCFDockOverflowListButton_OnClick and not ChatModsModule.hooks.chatOverflowSelectRefresh then
+        hooksecurefunc("FCFDockOverflowListButton_OnClick", function(self)
+            if not ChatModsModule.applied then return end
+            local chatFrame = self and self.chatFrame
+            if not chatFrame then return end
+            _G.SELECTED_CHAT_FRAME = chatFrame
+            _G.SELECTED_DOCK_FRAME = chatFrame
+            -- Fade in like FCF_Tab_OnClick; RefreshChatFadeState would snap to idle (mouse left the list).
+            if _G.FCF_FadeInChatFrame then
+                _G.FCF_FadeInChatFrame(chatFrame)
+            else
+                StartChatButtonsHoverUpdater(true)
+            end
+        end)
+        ChatModsModule.hooks.chatOverflowSelectRefresh = true
+    end
+
     ChatModsModule.applied = true
     RefreshChatFadeState()
     StartChatButtonsHoverUpdater(true)
@@ -1178,13 +1388,19 @@ local function RestoreChatModsSystem()
     if ChatModsModule.originalStates.tabAlphaGlobals then
         local normalAlpha = ChatModsModule.originalStates.tabAlphaGlobals.normal
         local selectedAlpha = ChatModsModule.originalStates.tabAlphaGlobals.selected or normalAlpha
-        local selectedIndex = (_G.SELECTED_CHAT_FRAME and _G.SELECTED_CHAT_FRAME.GetID and _G.SELECTED_CHAT_FRAME:GetID())
+        local selectedIndex = GetSelectedChatFrameIndex()
 
         for i = 1, CHAT_FRAME_LIMIT do
             local tab = _G["ChatFrame" .. i .. "Tab"]
             if tab then
                 tab.noMouseAlpha = (selectedIndex == i) and selectedAlpha or normalAlpha
             end
+        end
+
+        local overflow = GetOverflowButton()
+        if overflow and overflow:IsShown() then
+            overflow:SetAlpha(selectedAlpha)
+            SetMouseIfChanged(overflow, true)
         end
 
         ChatModsModule.frames.tabIdleAlpha = nil
@@ -1289,21 +1505,22 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         -- Register profile callbacks
         addon:After(0.5, function()
             if addon.db and addon.db.RegisterCallback then
-                addon.db.RegisterCallback(addon, "OnProfileChanged", OnProfileChanged)
-                addon.db.RegisterCallback(addon, "OnProfileCopied", OnProfileChanged)
-                addon.db.RegisterCallback(addon, "OnProfileReset", OnProfileChanged)
+                addon.db.RegisterCallback(ChatModsModule, "OnProfileChanged", OnProfileChanged)
+                addon.db.RegisterCallback(ChatModsModule, "OnProfileCopied", OnProfileChanged)
+                addon.db.RegisterCallback(ChatModsModule, "OnProfileReset", OnProfileChanged)
             end
         end)
 
     elseif event == "PLAYER_ENTERING_WORLD" then
         if not IsModuleEnabled() then return end
         ApplyChatModsSystem()
-        -- Re-apply tab noMouseAlpha after a short delay so it isn't overwritten
-        -- by Blizzard's FCFManager_UpdateChatFrameListAlpha which fires after PEW.
-        addon:After(1, function()
-            if not ChatModsModule.applied then return end
-            RefreshChatFadeState()
-        end)
+        -- Blizzard re-selects the default tab (forcing alpha to 1) at a variable point after PEW; retry a few times to catch it.
+        for _, delay in ipairs({0.5, 1.5, 3}) do
+            addon:After(delay, function()
+                if not ChatModsModule.applied then return end
+                RefreshChatFadeState()
+            end)
+        end
     end
 end)
 

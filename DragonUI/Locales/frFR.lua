@@ -56,6 +56,7 @@ L["Animated minimap border effects for DragonUI."] = "Effets de bordure animée 
 L["TargetCastbar"] = "Barre d'incantation de la cible"
 L["FocusCastbar"] = "Barre d'incantation du focus"
 L["Right-click to reset"] = "Clic droit pour réinitialiser"
+L["Click to reset"] = "Clic pour réinitialiser"
 L["Status Tooltip:"] = "Info-bulle d'etat :"
 L["Top"] = "Haut"
 L["Bottom"] = "Bas"
@@ -63,3 +64,95 @@ L["Left"] = "Gauche"
 L["Right"] = "Droite"
 L["Error Messages"] = "Messages d'erreur"
 L["ErrorMessages"] = "Messages d'erreur"
+L["Nameplates"] = "Plaques de nom"
+L["Apply DragonUI nameplate styling."] = "Applique le style DragonUI aux plaques de nom."
+
+-- Position presets (edit mode)
+L["Position Presets"] = "Préréglages de position"
+L["Position Preset"] = "Préréglage de position"
+L["Save"] = "Enregistrer"
+L["Import"] = "Importer"
+L["Cancel"] = "Annuler"
+L["Load"] = "Charger"
+L["Delete"] = "Supprimer"
+L["Select All"] = "Tout sélectionner"
+L["Click to load"] = "Cliquer pour charger"
+L["No position presets saved yet."] = "Aucun préréglage de position enregistré."
+L["Load position preset '%s'? This will overwrite your current element positions."] = "Charger le préréglage « %s » ? Les positions actuelles seront écrasées."
+L["Delete position preset '%s'? This cannot be undone."] = "Supprimer le préréglage « %s » ? Cette action est irréversible."
+L["Enter a name for the imported position preset:"] = "Entrez un nom pour le préréglage importé :"
+L["Imported Position Preset"] = "Préréglage importé"
+L["Position preset saved: "] = "Préréglage de position enregistré : "
+L["Position preset loaded: "] = "Préréglage de position chargé : "
+L["Position preset deleted: "] = "Préréglage de position supprimé : "
+L["Position preset imported: "] = "Préréglage de position importé : "
+L["Export Position Preset"] = "Exporter le préréglage de position"
+L["Import Position Preset"] = "Importer le préréglage de position"
+L["Invalid position preset string."] = "Chaîne de préréglage de position invalide."
+L["Not a valid DragonUI position preset string."] = "Ce n'est pas une chaîne de préréglage DragonUI valide."
+L["Failed to export position preset."] = "Échec de l'export du préréglage de position."
+L["Save New Preset"] = "Enregistrer un préréglage"
+L["Load Preset"] = "Charger le préréglage"
+L["Delete Preset"] = "Supprimer le préréglage"
+L["Export Preset"] = "Exporter le préréglage"
+L["Import Preset"] = "Importer le préréglage"
+
+-- Bag Sort (Sell Scrap)
+L["Sell Scrap"] = "Vendre ferraille"
+L["Open a merchant window first to sell scrap items."] = "Ouvrez d'abord une fenêtre de marchand pour vendre la ferraille."
+
+-- Guild Bank Sort
+L["You must be at the guild bank."] = "Vous devez être à la banque de guilde."
+L["Could not determine the current guild bank tab."] = "Impossible de déterminer l'onglet actuel de la banque de guilde."
+L["You need full deposit and withdraw access to this tab to sort it."] = "Vous avez besoin d'un accès complet au dépôt et au retrait sur cet onglet pour le trier."
+L["This guild bank tab is already sorted!"] = "Cet onglet de la banque de guilde est déjà trié !"
+L["Sort this guild bank tab? Depending on your server, this may be logged and count against your guild's shared withdrawal allowance, the same as moving items by hand."] = "Trier cet onglet de la banque de guilde ? Selon votre serveur, cela peut être enregistré et compter dans le quota de retrait partagé de votre guilde, comme si vous déplaciez les objets à la main."
+L["Sort"] = "Trier"
+L["Click to sort items in the currently open guild bank tab."] = "Cliquez pour trier les objets de l'onglet actuellement ouvert de la banque de guilde."
+L["Never moves items between tabs."] = "Ne déplace jamais d'objets entre les onglets."
+L["Sort Guild Bank Tab"] = "Trier l'onglet de la banque de guilde"
+
+L["Bag Skin"] = "Apparence des sacs"
+L["Retail-style skin for Blizzard bag windows"] = "Apparence Retail pour les fenêtres de sacs Blizzard"
+
+-- Version Check Module
+L["Version Check"] = "Vérification de version"
+L["Broadcast and detect addon version updates across group members"] = "Détecte les mises à jour de l'addon entre les membres du groupe en envoyant et recevant la version"
+
+-- Nameplate addon compatibility popup
+L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."] = "Utilise la transparence native de la plaque pour identifier la plaque de la cible ; entre en conflit avec le comportement anti-assombrissement par défaut de DragonUI."
+L["Parents its cooldown icons to the native health bar; conflicts with DragonUI's default health-bar hiding."] = "Attache ses icônes de temps de recharge à la barre de vie native ; entre en conflit avec le masquage par défaut de cette barre dans DragonUI."
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Addon Compatibility so it works correctly?"] = "|cFFFFFF00%s|r détecté. Activer la compatibilité des addons de plaques de nom pour qu'il fonctionne correctement ?"
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Health Bar Compatibility so it works correctly?"] = "|cFFFFFF00%s|r détecté. Activer la compatibilité de la barre de vie des plaques pour qu'il fonctionne correctement ?"
+L["Enable"] = "Activer"
+
+-- Extra Bar (issue #330)
+L["ExtraBar1"] = "Barre Supplémentaire"
+L["Extra Bar"] = "Barre Supplémentaire"
+L["A standalone action bar, independent of any class bonus bar"] = "Une barre d'action autonome, indépendante de toute barre de bonus de classe"
+L["Drag a spell, item or macro here."] = "Faites glisser un sort, un objet ou une macro ici."
+
+
+-- Quest nameplate icons wizard (Questie coexistence)
+L["Quest Icons on Nameplates"] = "Icônes de quête sur les plaques"
+L["Which quest icons do you want on your nameplates?"] = "Quelles icônes de quête voulez-vous sur vos plaques ?"
+L["Kill"] = "Tuer"
+L["Loot"] = "Butin"
+L['Pointer mode (just "!")'] = 'Mode pointeur (juste "!")'
+L["Use Questie"] = "Utiliser Questie"
+L["Applying quest icon settings needs a UI reload."] = "Appliquer les réglages des icônes de quête nécessite un rechargement de l'interface."
+L["Reload"] = "Recharger"
+
+-- Item Level
+L["Item Level"] = "Niveau d'objet"
+L["Show item level on gear icons in bags, character panel, bank, and more"] = "Afficher le niveau d'objet sur les icônes d'équipement dans les sacs, la fiche de personnage, la banque et plus encore"
+L["Item Level: %d"] = "Niveau d'objet : %d"
+
+
+-- Alt Gold
+L["Alt Gold"] = "Or des autres personnages"
+L["Show the gold of your other characters when hovering the money in your bags"] = "Affiche l'or de vos autres personnages en survolant l'argent de vos sacs"
+L["Character Gold"] = "Or des personnages"
+L["No other characters recorded yet"] = "Aucun autre personnage enregistré pour le moment"
+L["(current)"] = "(actuel)"
+L["Total"] = "Total"

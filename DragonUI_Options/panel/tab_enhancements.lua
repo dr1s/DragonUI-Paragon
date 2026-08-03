@@ -54,9 +54,11 @@ local function BuildEnhancementsTab(scroll)
         setFunc = function(val)
             EnsureModuleTable("darkmode").enabled = val
             if val then
-                if addon.ApplyDarkMode then addon.ApplyDarkMode() end
+                -- Force-push aura border tint on enable (clears Auras user override).
+                if addon.ApplyDarkMode then addon.ApplyDarkMode(true) end
             else
-                if addon.RestoreDarkMode then addon.RestoreDarkMode() end
+                -- Texture restore + reset aura buff border to default gray.
+                if addon.RestoreDarkMode then addon.RestoreDarkMode(true) end
             end
             -- Rebuild tab so the intensity dropdown updates its disabled state
             Panel:SelectTab("enhancements")
@@ -78,7 +80,7 @@ local function BuildEnhancementsTab(scroll)
             EnsureModuleTable("darkmode").intensity_preset = val
         end,
         callback = function()
-            if addon.RefreshDarkMode then addon.RefreshDarkMode() end
+            if addon.RefreshDarkMode then addon.RefreshDarkMode(true) end
         end,
         disabled = function() return not IsEnabled("darkmode") or GetModuleField("darkmode", "use_custom_color") == true end,
         width = 200,
@@ -90,7 +92,7 @@ local function BuildEnhancementsTab(scroll)
         getFunc = function() return GetModuleField("darkmode", "use_custom_color") == true end,
         setFunc = function(val)
             EnsureModuleTable("darkmode").use_custom_color = val
-            if addon.RefreshDarkMode then addon.RefreshDarkMode() end
+            if addon.RefreshDarkMode then addon.RefreshDarkMode(true) end
             Panel:SelectTab("enhancements")
         end,
         disabled = function() return not IsEnabled("darkmode") end,
@@ -108,7 +110,7 @@ local function BuildEnhancementsTab(scroll)
             EnsureModuleTable("darkmode").custom_color = { r = r, g = g, b = b }
         end,
         callback = function()
-            if addon.RefreshDarkMode then addon.RefreshDarkMode() end
+            if addon.RefreshDarkMode then addon.RefreshDarkMode(true) end
         end,
         hasAlpha = false,
     })
@@ -130,6 +132,49 @@ local function BuildEnhancementsTab(scroll)
         end,
         callback = function()
             if addon.RefreshRageIndicatorSystem then addon.RefreshRageIndicatorSystem() end
+        end,
+        requiresReload = false,
+    })
+
+    local function AddRangeColor(field, label, def)
+        C:AddColorPicker(rangeSection, {
+            label = label,
+            getFunc = function()
+                local c = GetModuleField("rage_indicator", field)
+                if c and c.r then return c.r, c.g, c.b end
+                return def.r, def.g, def.b
+            end,
+            setFunc = function(r, g, b)
+                EnsureModuleTable("rage_indicator")[field] = { r = r, g = g, b = b }
+            end,
+            callback = function()
+                if addon.RefreshRageIndicatorSystem then addon.RefreshRageIndicatorSystem() end
+            end,
+            disabled = function() return not IsEnabled("rage_indicator") end,
+            hasAlpha = false,
+        })
+    end
+
+    AddRangeColor("oor_color", LO["Out of Range Color"], { r = 0.8, g = 0.2, b = 0.2 })
+    AddRangeColor("oom_color", LO["Not Enough Mana Color"], { r = 0.5, g = 0.5, b = 1.0 })
+
+    -- ====================================================================
+    -- KEY PRESS (fire abilities on key down)
+    -- ====================================================================
+    C:AddSpacer(scroll)
+    local kpSection = C:AddSection(scroll, LO["Key Press"])
+
+    C:AddDescription(kpSection, LO["Fires action bar abilities the instant you press a key instead of when you release it, shaving reaction-time latency. Most useful for interrupts, dispels, and PvP."])
+
+    C:AddToggle(kpSection, {
+        label = LO["Enable Key Press"],
+        desc = LO["Fire abilities on key press instead of key release."],
+        getFunc = function() return IsEnabled("keypress") end,
+        setFunc = function(val)
+            EnsureModuleTable("keypress").enabled = val
+        end,
+        callback = function()
+            if addon.RefreshKeyPress then addon.RefreshKeyPress() end
         end,
         requiresReload = false,
     })
@@ -181,6 +226,161 @@ local function BuildEnhancementsTab(scroll)
         disabled = function() return not IsEnabled("itemquality") end,
         width = 200,
     })
+
+    -- ====================================================================
+    -- ITEM LEVEL
+    -- ====================================================================
+    C:AddSpacer(scroll)
+    local ilvlSection = C:AddSection(scroll, LO["Item Level"] or "Item Level")
+
+    local function IsItemLevelEnabled() return IsEnabled("itemlevel") end
+
+    C:AddToggle(ilvlSection, {
+        label = LO["Enable Item Level"] or "Enable Item Level",
+        desc = LO["Show the item level on gear icons across bags, bank, character panel and more."]
+            or "Show the item level on gear icons across bags, bank, character panel and more.",
+        getFunc = IsItemLevelEnabled,
+        setFunc = function(val)
+            EnsureModuleTable("itemlevel").enabled = val
+            if val then
+                if addon.ApplyItemLevelSystem then addon.ApplyItemLevelSystem() end
+            end
+            if addon.RefreshItemLevel then addon:RefreshItemLevel() end
+            -- Rebuild tab so the sub-options update their disabled state
+            Panel:SelectTab("enhancements")
+        end,
+        requiresReload = false,
+    })
+
+    C:AddDropdown(ilvlSection, {
+        label = LO["Font"] or "Font",
+        values = {
+            ["default"] = LO["Default (Arial Narrow)"] or "Default (Arial Narrow)",
+            ["expressway"] = "Expressway",
+            ["primary"] = "Friz Quadrata",
+            ["narrow"] = "PT Sans Narrow",
+            ["skurri"] = "Skurri",
+            ["morpheus"] = "Morpheus",
+        },
+        getFunc = function() return GetModuleField("itemlevel", "font_family") or "default" end,
+        setFunc = function(val)
+            EnsureModuleTable("itemlevel").font_family = val
+        end,
+        callback = function()
+            if addon.RefreshItemLevelFont then addon:RefreshItemLevelFont() end
+        end,
+        disabled = function() return not IsItemLevelEnabled() end,
+        width = 200,
+    })
+
+    C:AddDropdown(ilvlSection, {
+        label = LO["Outline"] or "Outline",
+        desc = LO["Thickness of the black outline. WoW 3.3.5a has no real bold, so a thicker outline is what makes the number look heavier."]
+            or "Thickness of the black outline. WoW 3.3.5a has no real bold, so a thicker outline is what makes the number look heavier.",
+        values = {
+            ["NONE"] = LO["None"] or "None",
+            ["OUTLINE"] = LO["Outline"] or "Outline",
+            ["THICKOUTLINE"] = LO["Thick"] or "Thick",
+        },
+        getFunc = function() return GetModuleField("itemlevel", "font_outline") or "OUTLINE" end,
+        setFunc = function(val)
+            EnsureModuleTable("itemlevel").font_outline = val
+        end,
+        callback = function()
+            if addon.RefreshItemLevelFont then addon:RefreshItemLevelFont() end
+        end,
+        disabled = function() return not IsItemLevelEnabled() end,
+        width = 200,
+    })
+
+    C:AddSlider(ilvlSection, {
+        label = LO["Font Size"] or "Font Size",
+        desc = LO["Size of the item level number on the icon."] or "Size of the item level number on the icon.",
+        min = 8, max = 18, step = 1,
+        getFunc = function() return GetModuleField("itemlevel", "font_size") or 11 end,
+        setFunc = function(val)
+            EnsureModuleTable("itemlevel").font_size = val
+            if addon.RefreshItemLevelFont then addon:RefreshItemLevelFont() end
+        end,
+        disabled = function() return not IsItemLevelEnabled() end,
+    })
+
+    C:AddDropdown(ilvlSection, {
+        label = LO["Position"] or "Position",
+        desc = LO["Vertical position of the item level number on the icon."]
+            or "Vertical position of the item level number on the icon.",
+        values = {
+            ["BOTTOM"] = LO["Bottom"] or "Bottom",
+            ["CENTER"] = LO["Center"] or "Center",
+            ["TOP"] = LO["Top"] or "Top",
+        },
+        getFunc = function() return GetModuleField("itemlevel", "position") or "BOTTOM" end,
+        setFunc = function(val)
+            EnsureModuleTable("itemlevel").position = val
+        end,
+        callback = function()
+            if addon.RefreshItemLevelPosition then addon:RefreshItemLevelPosition() end
+        end,
+        disabled = function() return not IsItemLevelEnabled() end,
+        width = 200,
+    })
+
+    C:AddToggle(ilvlSection, {
+        label = LO["Average Item Level"] or "Average Item Level",
+        desc = LO["Show the average item level of equipped gear on the character and inspect panels."]
+            or "Show the average item level of equipped gear on the character and inspect panels.",
+        getFunc = function() return GetModuleField("itemlevel", "show_average") ~= false end,
+        setFunc = function(val)
+            EnsureModuleTable("itemlevel").show_average = val
+            if addon.RefreshItemLevel then addon:RefreshItemLevel() end
+        end,
+        disabled = function() return not IsItemLevelEnabled() end,
+        requiresReload = false,
+    })
+
+    C:AddToggle(ilvlSection, {
+        label = LO["Show in Tooltip"] or "Show in Tooltip",
+        desc = LO["Also enable Blizzard's own item level line in item tooltips."]
+            or "Also enable Blizzard's own item level line in item tooltips.",
+        getFunc = function() return GetModuleField("itemlevel", "tooltip_cvar") == true end,
+        setFunc = function(val)
+            EnsureModuleTable("itemlevel").tooltip_cvar = val
+            SetCVar("showItemLevel", val and 1 or 0)
+        end,
+        disabled = function() return not IsItemLevelEnabled() end,
+        requiresReload = false,
+    })
+
+    -- Per-context toggles
+    local ilvlContexts = {
+        { key = "bags",      label = LO["Bags"] or "Bags" },
+        { key = "bank",      label = LO["Bank"] or "Bank" },
+        { key = "guildbank", label = LO["Guild Bank"] or "Guild Bank" },
+        { key = "character", label = LO["Character Panel"] or "Character Panel" },
+        { key = "inspect",   label = LO["Inspect"] or "Inspect" },
+        { key = "merchant",  label = LO["Merchant"] or "Merchant" },
+        { key = "trade",     label = LO["Trade"] or "Trade" },
+        { key = "loot",      label = LO["Loot"] or "Loot" },
+        { key = "lootroll",  label = LO["Loot Roll"] or "Loot Roll" },
+        { key = "mail",      label = LO["Mail"] or "Mail" },
+        { key = "auction",   label = LO["Auction House"] or "Auction House" },
+    }
+
+    C:AddDescription(ilvlSection, LO["Choose where the number appears:"] or "Choose where the number appears:")
+
+    for _, context in ipairs(ilvlContexts) do
+        C:AddToggle(ilvlSection, {
+            label = context.label,
+            getFunc = function() return GetModuleField("itemlevel", context.key) ~= false end,
+            setFunc = function(val)
+                EnsureModuleTable("itemlevel")[context.key] = val
+                if addon.RefreshItemLevel then addon:RefreshItemLevel() end
+            end,
+            disabled = function() return not IsItemLevelEnabled() end,
+            relWidth = 0.33,
+            requiresReload = false,
+        })
+    end
 
     -- ====================================================================
     -- UNIT FRAME LAYERS
@@ -322,6 +522,19 @@ local function BuildEnhancementsTab(scroll)
         end,
         setFunc = function(val)
             EnsureModuleTable("tooltip").anchor_cursor = val
+        end,
+        disabled = function() return not IsEnabled("tooltip") end,
+        requiresReload = false,
+    })
+
+    C:AddToggle(ttSection, {
+        label = LO["Show Aura Source"],
+        desc = LO["Show the caster's name (class-colored) and spell ID on buff and debuff tooltips."],
+        getFunc = function()
+            return GetModuleField("tooltip", "show_aura_source") ~= false
+        end,
+        setFunc = function(val)
+            EnsureModuleTable("tooltip").show_aura_source = val
         end,
         disabled = function() return not IsEnabled("tooltip") end,
         requiresReload = false,

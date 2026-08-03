@@ -45,7 +45,7 @@ end
 -- IMPORTANT: Keep in sync with database.lua → additional.stance
 local STANCE_DEFAULTS = {
     x_position = -211,
-    y_offset = -60,
+    y_offset = -58,
     button_size = 31,
     button_spacing = 6,
 }
@@ -195,7 +195,7 @@ local function CreateStanceFrames()
 
         local stanceCfg = addon.db.profile.additional.stance
         stanceCfg.x_position = math.floor((stanceCfg.x_position or -211) + deltaX + 0.5)
-        stanceCfg.y_offset = math.floor((stanceCfg.y_offset or -60) + deltaY + 0.5)
+        stanceCfg.y_offset = math.floor((stanceCfg.y_offset or -58) + deltaY + 0.5)
 
         stancebar_update()
 
@@ -308,7 +308,13 @@ end
 
 local function stancebutton_position()
     if not IsModuleEnabled() or not stancebar or not anchor then return end
-    
+
+    -- PLAYER_LOGIN also fires on a mid-combat /reload; reparenting secure buttons there is blocked.
+    if InCombatLockdown() then
+        addon.CombatQueue:Add("stance_position_buttons", stancebutton_position)
+        return
+    end
+
     -- READ VALUES FROM DATABASE
     local stanceConfig = GetStanceConfig()
     local additionalConfig = (addon.db and addon.db.profile and addon.db.profile.additional) or {}
@@ -356,6 +362,21 @@ local function stancebutton_position()
 	if not StanceModule.stateDrivers.visibility then
 	    StanceModule.stateDrivers.visibility = {frame = stancebar, state = 'visibility', condition = stance[class] or 'hide'}
 	    RegisterStateDriver(stancebar, 'visibility', stance[class] or 'hide')
+	end
+
+	-- Hover/combat fade layered on top of the state driver above (alpha-only, never Show/Hide).
+	if addon.VisibilityFade then
+	    local hoverFrames = { stancebar }
+	    for i = 1, NUM_SHAPESHIFT_SLOTS do
+	        local btn = _G['ShapeshiftButton' .. i]
+	        if btn then table.insert(hoverFrames, btn) end
+	    end
+	    addon.VisibilityFade.Register("stancebar", stancebar, {
+	        dbTable = function() return addon.db and addon.db.profile and addon.db.profile.additional and addon.db.profile.additional.stance end,
+	        hoverFrames = hoverFrames,
+	        clickThrough = true,
+	    })
+	    addon.VisibilityFade.Update("stancebar")
 	end
 end
 
@@ -693,37 +714,10 @@ function addon.RefreshStance()
 	
 	-- Update position
 	stancebar_update()
-end
 
--- Debug function for troubleshooting stance bar issues
-function addon.DebugStanceBar()
-    if not IsModuleEnabled() then
-        
-        return {enabled = false}
-    end
-    
-	local info = {
-		stanceBarInitialized = stanceBarInitialized,
-		moduleEnabled = IsModuleEnabled(),
-		inCombat = InCombatLockdown(),
-		unitInCombat = UnitAffectingCombat('player'),
-		anchorExists = anchor and true or false,
-		stanceBarExists = _G.pUiStanceBar and true or false,
-		numShapeshiftForms = GetNumShapeshiftForms(),
-		stanceConfig = GetStanceConfig()
-	};
-	
-	
-	for k, v in pairs(info) do
-	
+	if addon.VisibilityFade then
+		addon.VisibilityFade.Update("stancebar")
 	end
-	
-	if anchor then
-		local point, relativeTo, relativePoint, x, y = anchor:GetPoint();
-	
-	end
-	
-	return info;
 end
 
 -- ============================================================================

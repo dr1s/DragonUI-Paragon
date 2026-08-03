@@ -96,7 +96,7 @@ local function IsCollectorEnabled()
 end
 
 local function SetSectionVisualState(section, enabled)
-    if not section then
+    if not section or Panel.indexing then
         return
     end
 
@@ -128,6 +128,7 @@ local function BuildMinimapTab(scroll)
     local collectorWidgets = {}
 
     local function UpdateCollectorSectionState()
+        if Panel.indexing then return end
         local enabled = IsCollectorEnabled()
         for _, widget in ipairs(collectorWidgets) do
             if widget and widget.SetDisabled then
@@ -291,6 +292,7 @@ local function BuildMinimapTab(scroll)
     end
 
     local function UpdateAnimatedBorderSectionState()
+        if Panel.indexing then return end
         local enabled = IsAnimatedBorderEnabled()
         for _, widget in ipairs(animatedBorderWidgets) do
             if widget and widget.SetDisabled then
@@ -303,10 +305,18 @@ local function BuildMinimapTab(scroll)
     C:AddDescription(animatedBorder,
         LO["Adds decorative animated texture layers around the DragonUI minimap."])
 
+    local hideDragonUIBorderToggle
+
     C:AddToggle(animatedBorder, {
         label = LO["Enable Minimap Decorations"],
         dbPath = "minimap.animated_border_enabled",
         callback = function()
+            if not IsAnimatedBorderEnabled() then
+                C:SetDBValue("minimap.animated_border_hide_dragonui_border", false)
+                if hideDragonUIBorderToggle and hideDragonUIBorderToggle.SetValue then
+                    hideDragonUIBorderToggle:SetValue(false)
+                end
+            end
             UpdateAnimatedBorderSectionState()
             RefreshAnimatedBorder()
         end,
@@ -327,7 +337,7 @@ local function BuildMinimapTab(scroll)
         callback = RefreshAnimatedBorder,
     })
 
-    animatedBorderWidgets[#animatedBorderWidgets + 1] = C:AddToggle(animatedBorder, {
+    hideDragonUIBorderToggle = C:AddToggle(animatedBorder, {
         label = LO["Hide DragonUI Border"],
         dbPath = "minimap.animated_border_hide_dragonui_border",
         callback = function()
@@ -338,6 +348,7 @@ local function BuildMinimapTab(scroll)
             RefreshAnimatedBorder()
         end,
     })
+    animatedBorderWidgets[#animatedBorderWidgets + 1] = hideDragonUIBorderToggle
 
     animatedBorderScaleSlider = C:AddSlider(animatedBorder, {
         label = LO["Scale"],
@@ -360,6 +371,73 @@ local function BuildMinimapTab(scroll)
     })
 
     UpdateAnimatedBorderSectionState()
+
+    -- ====================================================================
+    -- VISIBILITY (EXPERIMENTAL)
+    -- ====================================================================
+    local visibility = C:AddSection(scroll, LO["Visibility"])
+
+    C:AddDescription(visibility,
+        "|cFFFFAA00" .. LO["Experimental:"] .. "|r " ..
+        LO["Fading the minimap can occasionally cause tracking icons to stop updating until you /reload. Use at your own risk."])
+
+    local function SyncMinimapVisibilityOption()
+        if addon.MinimapModule and addon.MinimapModule.SyncMinimapVisibility then
+            addon.MinimapModule.SyncMinimapVisibility()
+        end
+    end
+
+    -- Built manually (not via C:AddVisibilityFadeToggles) so "Hide in Combat" can sit right after
+    -- "Show in Combat Only" instead of after the AND/OR dropdown.
+    C:AddToggle(visibility, {
+        label = LO["Show on Hover Only"],
+        desc = LO["Fade the minimap until you hover over it."],
+        dbPath = "minimap.show_on_hover",
+        callback = SyncMinimapVisibilityOption,
+    })
+
+    C:AddToggle(visibility, {
+        label = LO["Show in Combat Only"],
+        desc = LO["Fade the minimap until you enter combat."],
+        dbPath = "minimap.show_in_combat",
+        callback = function()
+            local conflicted = C:GetDBValue("minimap.show_in_combat") and C:GetDBValue("minimap.hide_in_combat")
+            if conflicted then
+                C:SetDBValue("minimap.hide_in_combat", false)
+            end
+            SyncMinimapVisibilityOption()
+            if conflicted and Panel.currentTab then Panel:SelectTab(Panel.currentTab) end
+        end,
+    })
+
+    C:AddToggle(visibility, {
+        label = LO["Hide in Combat"],
+        desc = LO["Hide the minimap while in combat."],
+        dbPath = "minimap.hide_in_combat",
+        callback = function()
+            local conflicted = C:GetDBValue("minimap.hide_in_combat") and C:GetDBValue("minimap.show_in_combat")
+            if conflicted then
+                C:SetDBValue("minimap.show_in_combat", false)
+            end
+            SyncMinimapVisibilityOption()
+            if conflicted and Panel.currentTab then Panel:SelectTab(Panel.currentTab) end
+        end,
+    })
+
+    C:AddDropdown(visibility, {
+        label = LO["Hover/Combat Logic"],
+        desc = LO["When both hover and combat are enabled, choose whether both are required (AND) or either condition is enough (OR)."],
+        dbPath = "minimap.visibility_logic",
+        values = {
+            ["and"] = LO["AND (both required)"],
+            ["or"] = LO["OR (either condition)"],
+        },
+        callback = SyncMinimapVisibilityOption,
+    })
+
+    if addon._sexyMapInstalled then
+        C:AddDescription(visibility, LO["Has no effect while SexyMap controls the minimap (SexyMap or Hybrid mode)."])
+    end
 
     -- ====================================================================
     -- SEXYMAP COMPATIBILITY  (only when SexyMap is installed)

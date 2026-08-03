@@ -1,7 +1,7 @@
-﻿<Ui xmlns="http://www.blizzard.com/wow/ui/">
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
     <!-- Conflict Detection module (loaded early) -->
     <Script file="compatibility.lua"/>
-    
+
     <!-- Actionbar modules -->
     <Script file="noop.lua"/>
     <Script file="buttons.lua"/>
@@ -18,9 +18,13 @@
     
     <!-- KeyBinding module -->
     <Script file="keybinding.lua"/>
+
+    <!-- Key Press module (fire actions on key down instead of key release) -->
+    <Script file="keypress.lua"/>
     
     <!-- Buffs, Minimap & Quest Tracker modules -->
-    <Script file="BuffFrame.lua"/> 
+    <Script file="BuffFrame.lua"/>
+    <Script file="auraborders.lua"/>
     <Script file="minimap_collector.lua"/>
     <Script file="minimap.lua"/>
     <Script file="MinimapDecorations.lua"/>
@@ -46,15 +50,32 @@
     <!-- Tooltip Enhancement module -->
     <Script file="tooltip.lua"/>
     
+    <!-- Nameplates (custom stack on 30300 Blizzard plates) -->
+    <Script file="..\data\npc_rare_ranks.lua"/>
+    <Script file="..\data\aura_durations.lua"/>
+    <Include file="nameplates\nameplates.xml"/>
+    
     <!-- Item Quality Borders module -->
     <Script file="itemquality.lua"/>
-    
+
+    <!-- Item Level on gear icons -->
+    <Script file="itemlevel.lua"/>
+
     <!-- Chat Mods module -->
     <Script file="chatmods.lua"/>
     
-    <!-- Combuctor bag replacement module -->
-    <Include file="combuctor\combuctor.xml"/>
+    <!-- Bagster bag replacement module -->
+    <Include file="bagster\bagster.xml"/>
+
+    <!-- Blizzard bag window skin -->
+    <Script file="bags_skin.lua"/>
     
     <!-- Bag Sort module (sort buttons for bags and bank) -->
     <Script file="bagsort.lua"/>
+
+    <!-- Alt Gold module (other characters' money on the bag coin tooltip) -->
+    <Script file="altmoney.lua"/>
+
+    <!-- Version Check module (cross-player version broadcast) -->
+    <Script file="versioncheck.lua"/>
 </Ui>

@@ -55,6 +55,7 @@ L["Animated minimap border effects for DragonUI."] = "DragonUI 的小地圖動�
 -- 編輯模式標籤
 L["TargetCastbar"] = "目標施法條"
 L["FocusCastbar"] = "焦點施法條"
+L["Click to reset"] = "點擊重設"
 L["Right-click to reset"] = "右鍵重設"
 L["Status Tooltip:"] = "狀態提示："
 L["Top"] = "上"
@@ -63,3 +64,95 @@ L["Left"] = "左"
 L["Right"] = "右"
 L["Error Messages"] = "錯誤訊息"
 L["ErrorMessages"] = "錯誤訊息"
+L["Nameplates"] = "名牌"
+L["Apply DragonUI nameplate styling."] = "將 DragonUI 樣式套用至名牌。"
+
+-- Position presets (edit mode)
+L["Position Presets"] = "位置預設"
+L["Position Preset"] = "位置預設"
+L["Save"] = "儲存"
+L["Import"] = "匯入"
+L["Cancel"] = "取消"
+L["Load"] = "載入"
+L["Delete"] = "刪除"
+L["Select All"] = "全選"
+L["Click to load"] = "點擊載入"
+L["No position presets saved yet."] = "尚未儲存位置預設。"
+L["Load position preset '%s'? This will overwrite your current element positions."] = "載入預設 '%s'？這將覆蓋目前元素位置。"
+L["Delete position preset '%s'? This cannot be undone."] = "刪除預設 '%s'？此操作無法復原。"
+L["Enter a name for the imported position preset:"] = "輸入匯入預設的名稱："
+L["Imported Position Preset"] = "匯入的預設"
+L["Position preset saved: "] = "位置預設已儲存："
+L["Position preset loaded: "] = "位置預設已載入："
+L["Position preset deleted: "] = "位置預設已刪除："
+L["Position preset imported: "] = "位置預設已匯入："
+L["Export Position Preset"] = "匯出位置預設"
+L["Import Position Preset"] = "匯入位置預設"
+L["Invalid position preset string."] = "無效的位置預設字串。"
+L["Not a valid DragonUI position preset string."] = "不是有效的 DragonUI 位置預設字串。"
+L["Failed to export position preset."] = "匯出位置預設失敗。"
+L["Save New Preset"] = "儲存新預設"
+L["Load Preset"] = "載入預設"
+L["Delete Preset"] = "刪除預設"
+L["Export Preset"] = "匯出預設"
+L["Import Preset"] = "匯入預設"
+
+-- Bag Sort (Sell Scrap)
+L["Sell Scrap"] = "出售垃圾"
+L["Open a merchant window first to sell scrap items."] = "請先開啟商人視窗再出售垃圾物品。"
+
+-- Guild Bank Sort
+L["You must be at the guild bank."] = "你必須在公會銀行。"
+L["Could not determine the current guild bank tab."] = "無法確定目前的公會銀行頁籤。"
+L["You need full deposit and withdraw access to this tab to sort it."] = "你需要擁有該頁籤的完整存取權限才能整理它。"
+L["This guild bank tab is already sorted!"] = "此公會銀行頁籤已經整理好了！"
+L["Sort this guild bank tab? Depending on your server, this may be logged and count against your guild's shared withdrawal allowance, the same as moving items by hand."] = "整理這個公會銀行頁籤？根據你的伺服器不同，這可能會被記錄，並計入你公會共享的提取額度，和手動移動物品一樣。"
+L["Sort"] = "整理"
+L["Click to sort items in the currently open guild bank tab."] = "點擊整理目前開啟的公會銀行頁籤中的物品。"
+L["Never moves items between tabs."] = "永遠不會跨頁籤移動物品。"
+L["Sort Guild Bank Tab"] = "整理公會銀行頁籤"
+
+L["Bag Skin"] = "背包外觀"
+L["Retail-style skin for Blizzard bag windows"] = "暴雪背包視窗的正式服風格外觀"
+
+-- Version Check Module
+L["Version Check"] = "版本檢查"
+L["Broadcast and detect addon version updates across group members"] = "檢測隊伍成員間插件版本更新，通過廣播和接收版本資訊"
+
+-- Nameplate addon compatibility popup
+L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."] = "透過名牌的原生透明度來識別目標名牌，與 DragonUI 預設的防變暗行為衝突。"
+L["Parents its cooldown icons to the native health bar; conflicts with DragonUI's default health-bar hiding."] = "將其冷卻圖示掛到原生生命條上；與 DragonUI 預設隱藏該生命條的行為衝突。"
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Addon Compatibility so it works correctly?"] = "偵測到 |cFFFFFF00%s|r。是否啟用名牌外掛相容性以使其正常運作？"
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Health Bar Compatibility so it works correctly?"] = "偵測到 |cFFFFFF00%s|r。是否啟用名牌生命條相容性以使其正常運作？"
+L["Enable"] = "啟用"
+
+-- Extra Bar (issue #330)
+L["ExtraBar1"] = "額外欄"
+L["Extra Bar"] = "額外欄"
+L["A standalone action bar, independent of any class bonus bar"] = "一個獨立的動作列，不依賴於任何職業特殊列"
+L["Drag a spell, item or macro here."] = "將法術、物品或巨集拖到這裡。"
+
+
+-- Quest nameplate icons wizard (Questie coexistence)
+L["Quest Icons on Nameplates"] = "姓名板任務圖示"
+L["Which quest icons do you want on your nameplates?"] = "你想在姓名板上顯示哪種任務圖示？"
+L["Kill"] = "擊殺"
+L["Loot"] = "拾取"
+L['Pointer mode (just "!")'] = '指標模式（僅"!"）'
+L["Use Questie"] = "使用 Questie"
+L["Applying quest icon settings needs a UI reload."] = "套用任務圖示設定需要重新載入介面。"
+L["Reload"] = "重新載入"
+
+-- Item Level
+L["Item Level"] = "物品等級"
+L["Show item level on gear icons in bags, character panel, bank, and more"] = "在背包、角色面板、銀行等介面的裝備圖示上顯示物品等級"
+L["Item Level: %d"] = "物品等級：%d"
+
+
+-- Alt Gold
+L["Alt Gold"] = "其他角色金幣"
+L["Show the gold of your other characters when hovering the money in your bags"] = "將滑鼠移到揹包金錢上時顯示其他角色的金幣"
+L["Character Gold"] = "角色金幣"
+L["No other characters recorded yet"] = "尚未記錄其他角色"
+L["(current)"] = "(當前)"
+L["Total"] = "總計"

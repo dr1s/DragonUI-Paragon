@@ -1,4 +1,4 @@
-﻿--[[
+--[[
 ================================================================================
 DragonUI - English Locale (Default)
 ================================================================================
@@ -28,13 +28,13 @@ L["Options panel not available. Try /reload."] = true
 
 -- Module availability
 L["Editor mode not available."] = true
+L["Position editor not available."] = true
+L["Reset only supports resetting every position at once. Use /dragonui reset."] = true
 L["Keybind mode not available."] = true
 L["Vehicle debug not available"] = true
 L["KeyBinding module not available"] = true
 L["Unable to open configuration"] = true
 L["Commands: /dragonui config, /dragonui edit"] = true
-L["Reset position: %s"] = true
-L["All positions reset to defaults"] = true
 L["Editor mode enabled - Drag frames to reposition"] = true
 L["Editor mode disabled - Positions saved"] = true
 L["Minimap module restored to Blizzard defaults"] = true
@@ -48,7 +48,6 @@ L["Remaining: "] = true
 L["Rested: "] = true
 
 -- Errors
-L["Error executing pending operation:"] = true
 L["Error -- Addon 'DragonUI_Options' not found or is disabled."] = true
 
 -- ============================================================================
@@ -61,7 +60,6 @@ L["/dragonui or /dui - Open configuration"] = true
 L["/dragonui config - Open configuration"] = true
 L["/dragonui edit - Toggle editor mode (move UI elements)"] = true
 L["/dragonui reset - Reset all positions to defaults"] = true
-L["/dragonui reset <name> - Reset specific mover"] = true
 L["/dragonui status - Show module status"] = true
 L["/dragonui kb - Toggle keybind mode"] = true
 L["/dragonui version - Show version info"] = true
@@ -80,10 +78,8 @@ L["Target Frame"] = true
 L["Focus Frame"] = true
 L["Party Frames"] = true
 L["Cooldowns"] = true
-L["Registered Movers: "] = true
 L["Editable Frames: "] = true
 L["DragonUI Version: "] = true
-L["Use /dragonui edit to enter edit mode, then right-click frames to reset."] = true
 
 -- ============================================================================
 -- EDITOR MODE
@@ -97,6 +93,36 @@ L["No"] = true
 L["UI elements have been repositioned. Reload UI to ensure all graphics display correctly?"] = true
 L["Reload Now"] = true
 L["Later"] = true
+
+-- Position presets (edit mode)
+L["Position Presets"] = true
+L["Position Preset"] = true
+L["Save"] = true
+L["Import"] = true
+L["Cancel"] = true
+L["Load"] = true
+L["Delete"] = true
+L["Select All"] = true
+L["Click to load"] = true
+L["No position presets saved yet."] = true
+L["Load position preset '%s'? This will overwrite your current element positions."] = true
+L["Delete position preset '%s'? This cannot be undone."] = true
+L["Enter a name for the imported position preset:"] = true
+L["Imported Position Preset"] = true
+L["Position preset saved: "] = true
+L["Position preset loaded: "] = true
+L["Position preset deleted: "] = true
+L["Position preset imported: "] = true
+L["Export Position Preset"] = true
+L["Import Position Preset"] = true
+L["Invalid position preset string."] = true
+L["Not a valid DragonUI position preset string."] = true
+L["Failed to export position preset."] = true
+L["Save New Preset"] = true
+L["Load Preset"] = true
+L["Delete Preset"] = true
+L["Export Preset"] = true
+L["Import Preset"] = true
 
 -- ============================================================================
 -- KEYBINDING MODULE
@@ -156,6 +182,7 @@ L["MicroMenu"] = "Micro Menu"
 L["VehicleExitOverlay"] = "Vehicle Exit"
 L["StanceOverlay"] = "Stance Bar"
 L["petbar"] = "Pet Bar"
+L["ExtraBar1"] = "Extra Bar"
 L["boss"] = "Boss Frames"
 L["Boss Frames"] = true
 L["Boss1Frame"] = "Boss Frames"
@@ -167,7 +194,8 @@ L["PlayerCastbar"] = "Castbar"
 L["TargetCastbar"] = "Target Castbar"
 L["FocusCastbar"] = "Focus Castbar"
 L["TooltipWidget"] = "Tooltip"
-L["Auras"] = true
+L["Buff"] = true
+L["Debuffs"] = "Debuff"
 L["WeaponEnchants"] = "Weapon Enchants"
 L["Loot Roll"] = true
 L["Quest Tracker"] = true
@@ -176,6 +204,7 @@ L["Quest Tracker"] = true
 L["Drag to move"] = true
 L["Animated minimap border effects for DragonUI."] = true
 L["Right-click to reset"] = true
+L["Click to reset"] = true
 L["Status Tooltip:"] = true
 L["Top"] = true
 L["Bottom"] = true
@@ -217,15 +246,18 @@ L["Use DragonUI"] = true
 L["Disable Both"] = true
 L["Use DragonUI Unit Frame Layers"] = true
 L["Disable both Unit Frame Layers"] = true
-L["DragonUI - Party Frame Issue"] = true
-L["You joined a party while in combat. Due to CompactRaidFrame taint issues, party frames may not display correctly."] = true
-L["Reload the UI to fix party frame display?"] = true
 
 -- Conflict reasons
 L["Conflicts with DragonUI's custom unit frame textures and power bar system."] = true
-L["Known taint issues when manipulating party frames during combat. DragonUI provides automatic fixes."] = true
 L["Resets minimap mask and blip textures. DragonUI re-applies its custom textures automatically."] = true
 L["SexyMap modifies the minimap borders, shape, and zone text which conflicts with DragonUI's minimap module."] = true
+L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."] = true
+L["Parents its cooldown icons to the native health bar; conflicts with DragonUI's default health-bar hiding."] = true
+
+-- Nameplate addon compatibility popup
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Addon Compatibility so it works correctly?"] = true
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Health Bar Compatibility so it works correctly?"] = true
+L["Enable"] = true
 
 -- SexyMap compatibility popup
 L["DragonUI - SexyMap Detected"] = true
@@ -291,6 +323,25 @@ L["Slot unlocked (bag %d, slot %d)."] = true
 L["Could not clear locks (config not ready)."] = true
 L["Cleared all sort-locked slots."] = true
 
+-- Sell Scrap
+L["Sell Scrap"] = true
+L["Click to sell all gray (poor) items to vendor."] = true
+L["A merchant window must be open."] = true
+L["Open a merchant window first to sell scrap items."] = true
+L["Sold %d scrap item(s) for %s."] = true
+L["No scrap items to sell."] = true
+
+-- Guild Bank Sort
+L["You must be at the guild bank."] = true
+L["Could not determine the current guild bank tab."] = true
+L["You need full deposit and withdraw access to this tab to sort it."] = true
+L["This guild bank tab is already sorted!"] = true
+L["Sort this guild bank tab? Depending on your server, this may be logged and count against your guild's shared withdrawal allowance, the same as moving items by hand."] = true
+L["Sort"] = true
+L["Click to sort items in the currently open guild bank tab."] = true
+L["Never moves items between tabs."] = true
+L["Sort Guild Bank Tab"] = true
+
 -- Micromenu Latency
 L["Network"] = true
 L["Latency"] = true
@@ -310,7 +361,6 @@ L["disabled"] = true
 L["Enabled"] = true
 L["Disabled"] = true
 L["Legacy refresh failed for"] = true
-L["RegisterMover: name and parent are required"] = true
 L["Bonus Action Button %d"] = true
 L["Stance Button %d"] = true
 L["Pet Action Button %d"] = true
@@ -356,6 +406,8 @@ L["%s uses permanent secure hooks and will fully disable after /reload."] = true
 L["%s remains active until /reload because its secure hooks cannot be removed safely."] = true
 L["Cooldown Text"] = true
 L["Cooldown text on action buttons"] = true
+L["Range Indicator"] = true
+L["Color action button icons when target is out of range or ability is unusable."] = true
 L["Cast Bar"] = true
 L["Custom player, target, and focus cast bars"] = true
 L["Multicast"] = true
@@ -394,10 +446,15 @@ L["Normal"] = true
 L["Trade"] = true
 L["Target & Focus Aura Customization"] = true
 L["Customize target/focus aura icons and timers."] = true
+L["Aura Borders"] = true
+L["Modern borders on buff and debuff icons."] = true
 L["Dark Mode"] = true
 L["Darken UI borders and chrome"] = true
 L["Item Quality"] = true
 L["Color item borders by quality in bags, character panel, bank, and merchant"] = true
+L["Item Level"] = true
+L["Show item level on gear icons in bags, character panel, bank, and more"] = true
+L["Item Level: %d"] = true
 L["Key Binding"] = true
 L["LibKeyBound integration for intuitive keybinding"] = true
 L["Buff Frame"] = true
@@ -413,12 +470,21 @@ L["Shift"] = true
 L["Left Click"] = true
 L["Right Click"] = true
 L["Middle Click"] = true
-L["Combuctor"] = true
+L["Bag Skin"] = true
+L["Retail-style skin for Blizzard bag windows"] = true
+L["Bagster"] = true
 L["All-in-one bag replacement with filtering and search"] = true
+L["Alt Gold"] = true
+L["Show the gold of your other characters when hovering the money in your bags"] = true
+L["Character Gold"] = true
+L["No other characters recorded yet"] = true
+L["(current)"] = true
+L["Total"] = true
 L["Stance Bar"] = true
 L["Vehicle"] = true
 L["Vehicle interface enhancements"] = true
 L["Pet Bar"] = true
+L["Extra Bar"] = true
 L["Micro Menu"] = true
 L["Main Bars"] = true
 L["Main action bars, status bars, scaling and positioning"] = true
@@ -429,10 +495,14 @@ L["Custom minimap styling, positioning, tracking icons and calendar"] = true
 L["Quest tracker positioning and styling"] = true
 L["Tooltip"] = true
 L["Enhanced tooltip styling with class colors and health bars"] = true
+L["Nameplates"] = true
+L["Apply DragonUI nameplate styling."] = true
 L["Unit Frame Layers"] = true
 L["Heal prediction, absorb shields, and animated health loss on unit frames"] = true
 L["Stance/shapeshift bar positioning and styling"] = true
 L["Pet action bar positioning and styling"] = true
+L["A standalone action bar, independent of any class bonus bar"] = true
+L["Drag a spell, item or macro here."] = true
 L["Micro menu and bags system styling and positioning"] = true
 L["%s's Inventory"] = true
 L["%s's Bank"] = true
@@ -446,14 +516,47 @@ L["|cff00ff00Drag|r to move"] = true
 L["|cff00ff00Alt+Right-Click|r to reset position"] = true
 L["Toggle Inventory"] = true
 L["Toggle Bank"] = true
+L["|cff00ff00Left-Click|r to show this bag's items"] = true
+L["|cff00ff00Left-Click|r to hide this bag's items"] = true
+L["|cff00ff00Drag|r to move this bag"] = true
 L["Sort complete."] = true
 L["Sort already in progress."] = true
 L["Bags already sorted!"] = true
 L["You must be at the bank."] = true
 L["Bank already sorted!"] = true
 L["Reputation: "] = true
-L["Error in SafeCall:"] = true
 
 L["Double-Click to Copy"] = true
 L["Copy Text"] = true
 
+-- Version Check Module
+L["Version Check"] = true
+L["Broadcast and detect addon version updates across group members"] = true
+
+-- Quest nameplate icons wizard (Questie coexistence)
+L["Quest Icons on Nameplates"] = true
+L["Which quest icons do you want on your nameplates?"] = true
+L["Kill"] = true
+L["Loot"] = true
+L['Pointer mode (just "!")'] = true
+L["Use Questie"] = true
+L["Applying quest icon settings needs a UI reload."] = true
+L["Reload"] = true
+
+-- ============================================================================
+-- FRAME DIAGNOSTIC COMMANDS
+-- ============================================================================
+
+L["UFL diagnostic not available"] = true
+L["(unnamed)"] = true
+L["(unnamed_frame)"] = true
+L["SHOWN"] = true
+L["hidden"] = true
+L["VISIBLE"] = true
+L["invisible"] = true
+L["VIS"] = true
+L["inv"] = true
+L["Rect: left=%.1f bottom=%.1f w=%.1f h=%.1f"] = true
+L["Point1: %s -> %s %s (%.1f, %.1f)"] = true
+L["NumPoints: %d"] = true
+L["TexCoord: %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f"] = true

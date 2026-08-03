@@ -108,7 +108,12 @@ local subTabs = {
     { key = "pet",     label = LO["Pet"] },
     { key = "tot",     label = LO["ToT / ToF"] },
     { key = "party",   label = LO["Party"] },
+    { key = "boss",    label = LO["Boss"] },
 }
+
+-- Search navigation sub-tab setter.
+Panel.subTabSetters = Panel.subTabSetters or {}
+Panel.subTabSetters["unitframes"] = function(key) activeSubTab = key end
 
 -- ============================================================================
 -- COMMON CONTROLS BUILDER
@@ -374,6 +379,14 @@ local function BuildPlayerSection(scroll)
             end,
         })
     end
+
+    C:AddHeading(s, LO["Visibility"])
+    C:AddVisibilityFadeToggles(s, {
+        dbPrefix = "unitframe.player",
+        hoverDesc = LO["Fade the player frame until you hover over it."],
+        combatDesc = LO["Fade the player frame until you enter combat."],
+        callback = refreshPlayer,
+    })
 end
 
 local function BuildTargetSection(scroll)
@@ -392,6 +405,15 @@ local function BuildTargetSection(scroll)
         label = LO["Show Name Background"],
         desc = LO["Show the colored name background behind the target name."],
         dbPath = "unitframe.target.show_name_background",
+        callback = refreshTarget,
+    })
+
+    C:AddHeading(s, LO["Visibility"])
+    C:AddDescription(s, LO["Also fades the Target of Target and target cast bar, attached or not."])
+    C:AddVisibilityFadeToggles(s, {
+        dbPrefix = "unitframe.target",
+        hoverDesc = LO["Fade the target frame group until you hover over it."],
+        combatDesc = LO["Fade the target frame group until you enter combat."],
         callback = refreshTarget,
     })
 end
@@ -417,6 +439,15 @@ local function BuildFocusSection(scroll)
         label = LO["Show Buff/Debuff on Focus"],
         desc = LO["Uses the native large focus frame mode to show buffs and debuffs on the focus frame."],
         dbPath = "unitframe.focus.show_buff_debuff",
+        callback = refreshFocus,
+    })
+
+    C:AddHeading(s, LO["Visibility"])
+    C:AddDescription(s, LO["Also fades the Target of Focus and focus cast bar, attached or not."])
+    C:AddVisibilityFadeToggles(s, {
+        dbPrefix = "unitframe.focus",
+        hoverDesc = LO["Fade the focus frame group until you hover over it."],
+        combatDesc = LO["Fade the focus frame group until you enter combat."],
         callback = refreshFocus,
     })
 end
@@ -469,32 +500,56 @@ local function BuildPetSection(scroll)
 
     C:AddHeading(s, LO["Position"])
 
+    local positionWidgets = {}
+    local function RegisterPositionWidget(widget, disabledFunc)
+        table.insert(positionWidgets, { widget = widget, disabledFunc = disabledFunc })
+        return widget
+    end
+    local function RefreshPositionControlStates()
+        for _, entry in ipairs(positionWidgets) do
+            if entry.widget and entry.widget.SetDisabled and entry.disabledFunc then
+                entry.widget:SetDisabled(entry.disabledFunc())
+            end
+        end
+    end
+    -- Only used while attached; detached position comes from Editor Mode.
+    local IsPetAttached = function()
+        return C:GetDBValue("unitframe.pet.override")
+    end
+
     C:AddToggle(s, {
         label = LO["Override Position"],
         desc = LO["Move the pet frame independently from the player frame."],
         dbPath = "unitframe.pet.override",
-        callback = refreshPet,
+        callback = function()
+            refreshPet()
+            RefreshPositionControlStates()
+        end,
     })
 
-    C:AddSlider(s, {
+    RegisterPositionWidget(C:AddSlider(s, {
         label = LO["X Position"],
         dbPath = "unitframe.pet.x",
         min = -2500, max = 2500, step = 1,
         width = 200,
-        disabled = function()
-            return not C:GetDBValue("unitframe.pet.override")
-        end,
+        disabled = IsPetAttached,
         callback = refreshPet,
-    })
+    }), IsPetAttached)
 
-    C:AddSlider(s, {
+    RegisterPositionWidget(C:AddSlider(s, {
         label = LO["Y Position"],
         dbPath = "unitframe.pet.y",
         min = -2500, max = 2500, step = 1,
         width = 200,
-        disabled = function()
-            return not C:GetDBValue("unitframe.pet.override")
-        end,
+        disabled = IsPetAttached,
+        callback = refreshPet,
+    }), IsPetAttached)
+
+    C:AddHeading(s, LO["Visibility"])
+    C:AddVisibilityFadeToggles(s, {
+        dbPrefix = "unitframe.pet",
+        hoverDesc = LO["Fade the pet frame until you hover over it."],
+        combatDesc = LO["Fade the pet frame until you enter combat."],
         callback = refreshPet,
     })
 end
@@ -694,6 +749,38 @@ local function BuildPartySection(scroll)
         width = 200,
         callback = refreshParty,
     })
+
+    C:AddHeading(s, LO["Visibility"])
+    C:AddVisibilityFadeToggles(s, {
+        dbPrefix = "unitframe.party",
+        hoverDesc = LO["Fade party frames until you hover over them."],
+        combatDesc = LO["Fade party frames until you enter combat."],
+        callback = refreshParty,
+    })
+end
+
+local function BuildBossSection(scroll)
+    local refreshBoss = function()
+        if addon.RefreshBossFrames then addon.RefreshBossFrames() end
+    end
+
+    local s = C:AddSection(scroll, LO["Boss Frames"])
+
+    C:AddSlider(s, {
+        label = LO["Scale"],
+        dbPath = "unitframe.boss.scale",
+        min = 0.5, max = 2.0, step = 0.01,
+        width = 200,
+        callback = refreshBoss,
+    })
+
+    C:AddHeading(s, LO["Visibility"])
+    C:AddVisibilityFadeToggles(s, {
+        dbPrefix = "unitframe.boss",
+        hoverDesc = LO["Fade boss frames until you hover over them."],
+        combatDesc = LO["Fade boss frames until you enter combat."],
+        callback = refreshBoss,
+    })
 end
 
 -- ============================================================================
@@ -707,6 +794,7 @@ local subTabBuilders = {
     pet    = BuildPetSection,
     tot    = BuildToTSection,
     party  = BuildPartySection,
+    boss   = BuildBossSection,
 }
 
 -- ============================================================================
@@ -717,11 +805,12 @@ local function BuildUnitframesTab(scroll)
     C:AddSubTabs(scroll, subTabs, activeSubTab, function(key)
         activeSubTab = key
         Panel:SelectTab("unitframes")
-    end)
+    end, subTabBuilders)
 
-    local builder = subTabBuilders[activeSubTab]
-    if builder then
-        builder(scroll)
+    -- AddSubTabs already harvests all sub-tabs during indexing.
+    if not Panel.indexing then
+        local builder = subTabBuilders[activeSubTab]
+        if builder then builder(scroll) end
     end
 end
 

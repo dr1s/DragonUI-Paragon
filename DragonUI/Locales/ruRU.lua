@@ -33,8 +33,6 @@ L["Vehicle debug not available"] = "Отладка транспорта недо
 L["KeyBinding module not available"] = "Модуль назначения клавиш недоступен"
 L["Unable to open configuration"] = "Не удалось открыть настройки"
 L["Commands: /dragonui config, /dragonui edit"] = "Команды: /dragonui config, /dragonui edit"
-L["Reset position: %s"] = "Сброс позиции: %s"
-L["All positions reset to defaults"] = "Все позиции сброшены по умолчанию"
 L["Editor mode enabled - Drag frames to reposition"] = "Режим редактора включён — перетаскивайте фреймы для перемещения"
 L["Editor mode disabled - Positions saved"] = "Режим редактора выключен — позиции сохранены"
 L["Minimap module restored to Blizzard defaults"] = "Модуль миникарты восстановлен до стандартных настроек Blizzard"
@@ -48,7 +46,6 @@ L["Remaining: "] = "Осталось: "
 L["Rested: "] = "Отдых: "
 
 -- Errors
-L["Error executing pending operation:"] = "Ошибка выполнения отложенной операции:"
 L["Error -- Addon 'DragonUI_Options' not found or is disabled."] = "Ошибка — Аддон 'DragonUI_Options' не найден или отключён."
 
 -- ============================================================================
@@ -61,7 +58,6 @@ L["/dragonui or /dui - Open configuration"] = "/dragonui или /dui — Отк�
 L["/dragonui config - Open configuration"] = "/dragonui config — Открыть настройки"
 L["/dragonui edit - Toggle editor mode (move UI elements)"] = "/dragonui edit — Переключить режим редактора (перемещение элементов)"
 L["/dragonui reset - Reset all positions to defaults"] = "/dragonui reset — Сбросить все позиции по умолчанию"
-L["/dragonui reset <name> - Reset specific mover"] = "/dragonui reset <имя> — Сбросить конкретный элемент"
 L["/dragonui status - Show module status"] = "/dragonui status — Показать статус модулей"
 L["/dragonui kb - Toggle keybind mode"] = "/dragonui kb — Переключить режим назначения клавиш"
 L["/dragonui version - Show version info"] = "/dragonui version — Показать версию"
@@ -80,10 +76,8 @@ L["Target Frame"] = true
 L["Focus Frame"] = true
 L["Party Frames"] = true
 L["Cooldowns"] = true
-L["Registered Movers: "] = "Зарегистрированные элементы перемещения: "
 L["Editable Frames: "] = "Редактируемые фреймы: "
 L["DragonUI Version: "] = "Версия DragonUI: "
-L["Use /dragonui edit to enter edit mode, then right-click frames to reset."] = "Используйте /dragonui edit для входа в режим редактора, ПКМ по фрейму для сброса."
 
 -- ============================================================================
 -- EDITOR MODE
@@ -97,6 +91,36 @@ L["No"] = "Нет"
 L["UI elements have been repositioned. Reload UI to ensure all graphics display correctly?"] = "Элементы интерфейса были перемещены. Перезагрузить интерфейс для корректного отображения?"
 L["Reload Now"] = "Перезагрузить"
 L["Later"] = "Позже"
+
+-- Position presets (edit mode)
+L["Position Presets"] = "Пресеты позиций"
+L["Position Preset"] = "Пресет позиций"
+L["Save"] = "Сохранить"
+L["Import"] = "Импорт"
+L["Cancel"] = "Отмена"
+L["Load"] = "Загрузить"
+L["Delete"] = "Удалить"
+L["Select All"] = "Выделить всё"
+L["Click to load"] = "Нажмите для загрузки"
+L["No position presets saved yet."] = "Пресеты позиций ещё не сохранены."
+L["Load position preset '%s'? This will overwrite your current element positions."] = "Загрузить пресет '%s'? Текущие позиции элементов будут перезаписаны."
+L["Delete position preset '%s'? This cannot be undone."] = "Удалить пресет '%s'? Это действие нельзя отменить."
+L["Enter a name for the imported position preset:"] = "Введите имя для импортированного пресета:"
+L["Imported Position Preset"] = "Импортированный пресет"
+L["Position preset saved: "] = "Пресет позиций сохранён: "
+L["Position preset loaded: "] = "Пресет позиций загружен: "
+L["Position preset deleted: "] = "Пресет позиций удалён: "
+L["Position preset imported: "] = "Пресет позиций импортирован: "
+L["Export Position Preset"] = "Экспорт пресета позиций"
+L["Import Position Preset"] = "Импорт пресета позиций"
+L["Invalid position preset string."] = "Недопустимая строка пресета позиций."
+L["Not a valid DragonUI position preset string."] = "Не является допустимой строкой пресета позиций DragonUI."
+L["Failed to export position preset."] = "Не удалось экспортировать пресет позиций."
+L["Save New Preset"] = "Сохранить новый пресет"
+L["Load Preset"] = "Загрузить пресет"
+L["Delete Preset"] = "Удалить пресет"
+L["Export Preset"] = "Экспорт пресета"
+L["Import Preset"] = "Импорт пресета"
 
 -- ============================================================================
 -- KEYBINDING MODULE
@@ -155,6 +179,7 @@ L["MicroMenu"] = "Микроменю"
 L["VehicleExitOverlay"] = "Выход из транспорта"
 L["StanceOverlay"] = "Панель стоек"
 L["petbar"] = "Панель питомца"
+L["ExtraBar1"] = "Дополнительная панель"
 L["boss"] = "Фреймы боссов"
 L["Boss Frames"] = "Фреймы боссов"
 L["Boss1Frame"] = "Фреймы боссов"
@@ -164,7 +189,8 @@ L["Boss4Frame"] = "Фреймы боссов"
 L["TotemBarOverlay"] = "Панель тотемов"
 L["PlayerCastbar"] = "Полоса заклинаний"
 L["TooltipWidget"] = "Подсказка"
-L["Auras"] = "Ауры"
+L["Buff"] = "Баф"
+L["Debuffs"] = "Дебаф"
 L["WeaponEnchants"] = "Зачарования оружия"
 L["Loot Roll"] = "Розыгрыш добычи"
 L["Quest Tracker"] = "Трекер заданий"
@@ -172,6 +198,7 @@ L["Quest Tracker"] = "Трекер заданий"
 -- Mover tooltip strings
 L["Drag to move"] = "Перетащите для перемещения"
 L["Animated minimap border effects for DragonUI."] = "Анимированные эффекты рамки миникарты для DragonUI."
+L["Click to reset"] = "Клик для сброса"
 L["Right-click to reset"] = "ПКМ для сброса"
 L["Status Tooltip:"] = "Подсказка статуса:"
 L["Top"] = "Сверху"
@@ -213,15 +240,18 @@ L["Use DragonUI"] = "Использовать DragonUI"
 L["Disable Both"] = "Отключить оба"
 L["Use DragonUI Unit Frame Layers"] = "Использовать слои фреймов DragonUI"
 L["Disable both Unit Frame Layers"] = "Отключить оба варианта слоёв фреймов"
-L["DragonUI - Party Frame Issue"] = true
-L["You joined a party while in combat. Due to CompactRaidFrame taint issues, party frames may not display correctly."] = true
-L["Reload the UI to fix party frame display?"] = true
 
 -- Conflict reasons
 L["Conflicts with DragonUI's custom unit frame textures and power bar system."] = "Конфликтует с пользовательскими текстурами фреймов и системой полос ресурсов DragonUI."
-L["Known taint issues when manipulating party frames during combat. DragonUI provides automatic fixes."] = "Известные проблемы с taint при изменении фреймов группы в бою. DragonUI применяет автоматические исправления."
 L["Resets minimap mask and blip textures. DragonUI re-applies its custom textures automatically."] = "Сбрасывает маску и текстуры миникарты. DragonUI автоматически восстанавливает свои текстуры."
 L["SexyMap modifies the minimap borders, shape, and zone text which conflicts with DragonUI's minimap module."] = "SexyMap изменяет границы, форму и текст зоны миникарты, что конфликтует с модулем миникарты DragonUI."
+L["Reads native nameplate alpha to identify the target's plate; conflicts with DragonUI's default anti-dim behavior."] = "Использует нативную прозрачность плашки для определения плашки цели; конфликтует со стандартным поведением DragonUI по устранению затемнения."
+L["Parents its cooldown icons to the native health bar; conflicts with DragonUI's default health-bar hiding."] = "Привязывает значки кулдаунов к нативной полосе здоровья; конфликтует со стандартным скрытием этой полосы в DragonUI."
+
+-- Nameplate addon compatibility popup
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Addon Compatibility so it works correctly?"] = "Обнаружен |cFFFFFF00%s|r. Включить совместимость с аддонами плашек, чтобы он работал корректно?"
+L["Detected |cFFFFFF00%s|r. Enable Nameplate Health Bar Compatibility so it works correctly?"] = "Обнаружен |cFFFFFF00%s|r. Включить совместимость полосы здоровья плашек, чтобы он работал корректно?"
+L["Enable"] = "Включить"
 
 -- SexyMap compatibility popup
 L["DragonUI - SexyMap Detected"] = "DragonUI — Обнаружен SexyMap"
@@ -286,6 +316,21 @@ L["Slot unlocked (bag %d, slot %d)."] = "Ячейка разблокирован
 L["Could not clear locks (config not ready)."] = "Не удалось очистить блокировки (конфигурация не готова)."
 L["Cleared all sort-locked slots."] = "Все заблокированные ячейки очищены."
 
+-- Sell Scrap
+L["Sell Scrap"] = "Продать хлам"
+L["Open a merchant window first to sell scrap items."] = "Сначала откройте окно торговца, чтобы продать хлам."
+
+-- Guild Bank Sort
+L["You must be at the guild bank."] = "Вы должны находиться в гильдейском банке."
+L["Could not determine the current guild bank tab."] = "Не удалось определить текущую вкладку гильдейского банка."
+L["You need full deposit and withdraw access to this tab to sort it."] = "Вам нужен полный доступ на внесение и снятие для этой вкладки, чтобы её отсортировать."
+L["This guild bank tab is already sorted!"] = "Эта вкладка гильдейского банка уже отсортирована!"
+L["Sort this guild bank tab? Depending on your server, this may be logged and count against your guild's shared withdrawal allowance, the same as moving items by hand."] = "Отсортировать эту вкладку гильдейского банка? В зависимости от сервера это может быть записано в журнал и засчитано в общий лимит снятия вашей гильдии, как и при ручном перемещении предметов."
+L["Sort"] = "Сортировать"
+L["Click to sort items in the currently open guild bank tab."] = "Нажмите, чтобы отсортировать предметы в текущей открытой вкладке гильдейского банка."
+L["Never moves items between tabs."] = "Никогда не перемещает предметы между вкладками."
+L["Sort Guild Bank Tab"] = "Сортировать вкладку гильдейского банка"
+
 -- Micromenu Latency
 L["Network"] = "Сеть"
 L["Latency"] = "Задержка"
@@ -305,7 +350,6 @@ L["disabled"] = true
 L["Enabled"] = "Включён"
 L["Disabled"] = "Выключен"
 L["Legacy refresh failed for"] = true
-L["RegisterMover: name and parent are required"] = true
 L["Bonus Action Button %d"] = true
 L["Stance Button %d"] = true
 L["Pet Action Button %d"] = true
@@ -387,6 +431,11 @@ L["Dark Mode"] = "Тёмный режим"
 L["Darken UI borders and chrome"] = "Затемнение рамок и элементов интерфейса"
 L["Item Quality"] = "Качество предметов"
 L["Color item borders by quality in bags, character panel, bank, and merchant"] = "Окрашивание рамок предметов по качеству в сумках, окне персонажа, банке и у торговца"
+-- Item Level
+L["Item Level"] = "Уровень предмета"
+L["Show item level on gear icons in bags, character panel, bank, and more"] = "Показывать уровень предмета на значках экипировки в сумках, окне персонажа, банке и других местах"
+L["Item Level: %d"] = "Уровень предмета: %d"
+
 L["Key Binding"] = "Назначение клавиш"
 L["LibKeyBound integration for intuitive keybinding"] = "Интеграция LibKeyBound для удобного назначения клавиш"
 L["Buff Frame"] = "Фрейм эффектов"
@@ -395,12 +444,17 @@ L["Chat Mods"] = "Улучшения чата"
 L["Chat enhancements: hide buttons, editbox position, URL copy, chat copy, link hover, tell target"] = "Улучшения чата: скрытие кнопок, позиция строки ввода, копирование URL, копирование чата, ховер ссылок, шёпот цели"
 L["Bag Sort"] = "Сортировка сумок"
 L["Sort bags and bank items with buttons"] = "Сортировка предметов в сумках и банке кнопками"
-L["Combuctor"] = "Combuctor"
+L["Bag Skin"] = "Оформление сумок"
+L["Retail-style skin for Blizzard bag windows"] = "Оформление окон сумок Blizzard в стиле Retail"
+L["Bagster"] = "Bagster"
 L["All-in-one bag replacement with filtering and search"] = "Универсальная замена сумок с фильтрацией и поиском"
 L["Stance Bar"] = "Панель стоек"
 L["Vehicle"] = "Транспорт"
 L["Vehicle interface enhancements"] = "Улучшения интерфейса транспорта"
 L["Pet Bar"] = "Панель питомца"
+L["Extra Bar"] = "Дополнительная панель"
+L["A standalone action bar, independent of any class bonus bar"] = "Независимая панель действий, не связанная с дополнительной панелью класса"
+L["Drag a spell, item or macro here."] = "Перетащите сюда заклинание, предмет или макрос."
 L["Micro Menu"] = "Микроменю"
 L["Main Bars"] = "Основные панели"
 L["Main action bars, status bars, scaling and positioning"] = "Основные панели действий, полосы статуса, масштабирование и позиционирование"
@@ -411,17 +465,43 @@ L["Custom minimap styling, positioning, tracking icons and calendar"] = "Сти�
 L["Quest tracker positioning and styling"] = "Позиционирование и стилизация трекера заданий"
 L["Tooltip"] = "Подсказка"
 L["Enhanced tooltip styling with class colors and health bars"] = "Улучшенные подсказки с цветами классов и полосами здоровья"
+L["Nameplates"] = "Индикаторы"
+L["Apply DragonUI nameplate styling."] = "Применяет стиль DragonUI к индикаторам."
 L["Unit Frame Layers"] = "Слои фреймов"
 L["Heal prediction, absorb shields, and animated health loss on unit frames"] = "Предсказание исцеления, щиты поглощения и анимация потери здоровья на фреймах"
 L["Stance/shapeshift bar positioning and styling"] = "Позиционирование и стилизация панели стоек/форм"
 L["Pet action bar positioning and styling"] = "Позиционирование и стилизация панели действий питомца"
 L["Micro menu and bags system styling and positioning"] = "Стилизация и позиционирование микроменю и системы сумок"
+L["|cff00ff00Left-Click|r to show this bag's items"] = "|cff00ff00ЛКМ|r — показать предметы этой сумки"
+L["|cff00ff00Left-Click|r to hide this bag's items"] = "|cff00ff00ЛКМ|r — скрыть предметы этой сумки"
+L["|cff00ff00Drag|r to move this bag"] = "|cff00ff00Перетащите|r, чтобы переместить эту сумку"
 L["Sort complete."] = "Сортировка завершена."
 L["Sort already in progress."] = "Сортировка уже выполняется."
 L["Bags already sorted!"] = "Сумки уже отсортированы!"
 L["You must be at the bank."] = "Вы должны находиться у банка."
 L["Bank already sorted!"] = "Банк уже отсортирован!"
 L["Reputation: "] = "Репутация: "
-L["Error in SafeCall:"] = "Ошибка в SafeCall:"
 
 L["Copy Text"] = "Копировать текст"
+
+
+L["Version Check"] = "Проверка версий"
+L["Broadcast and detect addon version updates across group members"] = "Обнаруживает обновления аддона среди участников группы, отправляя и получая версию"
+
+-- Quest nameplate icons wizard (Questie coexistence)
+L["Quest Icons on Nameplates"] = "Значки заданий на табличках"
+L["Which quest icons do you want on your nameplates?"] = "Какие значки заданий показывать на табличках?"
+L["Kill"] = "Убийство"
+L["Loot"] = "Добыча"
+L['Pointer mode (just "!")'] = 'Режим указателя (только «!»)'
+L["Use Questie"] = "Использовать Questie"
+L["Applying quest icon settings needs a UI reload."] = "Для применения настроек значков заданий нужна перезагрузка интерфейса."
+L["Reload"] = "Перезагрузить"
+
+-- Alt Gold
+L["Alt Gold"] = "Золото других персонажей"
+L["Show the gold of your other characters when hovering the money in your bags"] = "Показывает золото других ваших персонажей при наведении на деньги в сумках"
+L["Character Gold"] = "Золото персонажей"
+L["No other characters recorded yet"] = "Другие персонажи ещё не записаны"
+L["(current)"] = "(текущий)"
+L["Total"] = "Всего"
